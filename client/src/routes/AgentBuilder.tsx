@@ -7,8 +7,8 @@ import { useAuthContext } from '~/hooks';
 import useAuthRedirect from './useAuthRedirect';
 
 /**
- * AgentBuilder 路由已迁移到全局配置管理页面
- * 此路由现在重定向到全局配置管理页面
+ * AgentBuilder 路由已迁移到Agent平台页面
+ * 此路由现在重定向到Agent平台页面
  */
 export default function AgentBuilder() {
   const { isAuthenticated } = useAuthRedirect();
@@ -21,7 +21,7 @@ export default function AgentBuilder() {
   useEffect(() => {
     if (isAuthenticated) {
       if (isAdmin) {
-        // 管理员重定向到全局配置管理的智能体管理标签页
+        // 管理员重定向到Agent平台的智能体管理标签页
         navigate('/global-config?tab=agents', { replace: true });
       } else {
         // 非管理员重定向到主页

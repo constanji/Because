@@ -63,8 +63,24 @@ export const getCustomEndpointConfig = ({
   }
 
   const customEndpoints = appConfig.endpoints?.[EModelEndpoint.custom] ?? [];
+  // 规范化比较：对端点名称和配置名称都进行规范化，支持不区分大小写的匹配
+  const normalizedEndpoint = normalizeEndpointName(endpoint);
+  const lowerEndpoint = typeof endpoint === 'string' ? endpoint.toLowerCase() : endpoint;
+  
   return customEndpoints.find(
-    (endpointConfig) => normalizeEndpointName(endpointConfig.name) === endpoint,
+    (endpointConfig) => {
+      if (!endpointConfig.name) return false;
+      const normalizedConfigName = normalizeEndpointName(endpointConfig.name);
+      const lowerConfigName = endpointConfig.name.toLowerCase();
+      
+      // 多种匹配方式，确保能找到配置的端点
+      return normalizedConfigName === normalizedEndpoint || 
+             normalizedConfigName === endpoint ||
+             normalizedConfigName === lowerEndpoint ||
+             endpointConfig.name === endpoint ||
+             lowerConfigName === lowerEndpoint ||
+             lowerConfigName === endpoint?.toLowerCase();
+    },
   );
 };
 

@@ -28,21 +28,33 @@ COPY agents-Aipyq/tsconfig*.json ./agents-Aipyq/
 COPY agents-Aipyq/rollup.config.js ./agents-Aipyq/
 COPY agents-Aipyq/husky-setup.js ./agents-Aipyq/
 COPY agents-Aipyq/src ./agents-Aipyq/src
+# Copy dist if it exists locally (will be used to skip build)
+COPY agents-Aipyq/dist ./agents-Aipyq/dist
 ENV DISABLE_SOURCEMAP=true
-ENV NODE_OPTIONS="--max-old-space-size=4096"
-RUN cd agents-Aipyq && npm install --no-audit && DISABLE_SOURCEMAP=true npm run build
+ENV NODE_OPTIONS="--max-old-space-size=8192"
+# Build only if dist doesn't exist or is empty
+RUN if [ ! -d "agents-Aipyq/dist" ] || [ -z "$(ls -A agents-Aipyq/dist 2>/dev/null)" ]; then \
+      echo "Building agents-Aipyq (dist not found)..."; \
+      cd agents-Aipyq && npm install --no-audit && DISABLE_SOURCEMAP=true npm run build; \
+    else \
+      echo "Using existing dist directory, skipping build"; \
+    fi
 
 # Install all dependencies for every build
 FROM base-min AS base
 WORKDIR /app
 COPY --from=agents-build /app/agents-Aipyq/dist ./agents-Aipyq/dist
 COPY --from=agents-build /app/agents-Aipyq/package.json ./agents-Aipyq/package.json
+COPY --from=agents-build /app/agents-Aipyq/husky-setup.js ./agents-Aipyq/husky-setup.js
+ENV HUSKY=0
+ENV CI=true
 RUN npm ci
 
 # Build `data-provider` package
 FROM base AS data-provider-build
 WORKDIR /app/packages/data-provider
 COPY packages/data-provider ./
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # Build `data-schemas` package
@@ -50,6 +62,7 @@ FROM base AS data-schemas-build
 WORKDIR /app/packages/data-schemas
 COPY packages/data-schemas ./
 COPY --from=data-provider-build /app/packages/data-provider/dist /app/packages/data-provider/dist
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # Build `api` package
@@ -58,12 +71,14 @@ WORKDIR /app/packages/api
 COPY packages/api ./
 COPY --from=data-provider-build /app/packages/data-provider/dist /app/packages/data-provider/dist
 COPY --from=data-schemas-build /app/packages/data-schemas/dist /app/packages/data-schemas/dist
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 RUN npm run build
 
 # Build `client` package
 FROM base AS client-package-build
 WORKDIR /app/packages/client
 COPY packages/client ./
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # Client build
@@ -73,7 +88,7 @@ COPY client ./
 COPY --from=data-provider-build /app/packages/data-provider/dist /app/packages/data-provider/dist
 COPY --from=client-package-build /app/packages/client/dist /app/packages/client/dist
 COPY --from=client-package-build /app/packages/client/src /app/packages/client/src
-ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # API setup (including client dist)
@@ -86,6 +101,11 @@ WORKDIR /app
 COPY package*.json ./
 COPY --from=agents-build /app/agents-Aipyq/dist ./agents-Aipyq/dist
 COPY --from=agents-build /app/agents-Aipyq/package.json ./agents-Aipyq/package.json
+# Copy husky-setup.js to avoid prepare script failure
+COPY --from=agents-build /app/agents-Aipyq/husky-setup.js ./agents-Aipyq/husky-setup.js
+# Set environment variables to skip husky setup
+ENV HUSKY=0
+ENV CI=true
 # Install only production deps
 RUN npm ci --omit=dev
 COPY api ./api

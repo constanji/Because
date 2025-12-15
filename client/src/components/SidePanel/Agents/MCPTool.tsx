@@ -183,20 +183,11 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
                   {currentServerName}
                 </div>
                 <div className="flex items-center">
-                  <div className="relative flex items-center">
-                    <div
-                      className={cn(
-                        'absolute right-0 transition-all duration-300',
-                        isHovering || isFocused
-                          ? 'translate-x-0 opacity-100'
-                          : 'translate-x-8 opacity-0',
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
+                  <div className="relative flex items-center gap-2">
                         <div
                           data-checkbox-container
                           onClick={(e) => e.stopPropagation()}
-                          className="mt-1"
+                      className={cn('mt-1', isExpanded ? 'visible' : 'pointer-events-none invisible')}
                         >
                           <Checkbox
                             id={`select-all-${currentServerName}`}
@@ -216,7 +207,6 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
                             }}
                             className={cn(
                               'h-4 w-4 rounded border border-border-medium transition-all duration-200 hover:border-border-heavy',
-                              isExpanded ? 'visible' : 'pointer-events-none invisible',
                             )}
                             onClick={(e) => e.stopPropagation()}
                             onKeyDown={(e) => {
@@ -246,7 +236,7 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
                                 e.stopPropagation();
                               }}
                               className={cn(
-                                'flex h-7 w-7 items-center justify-center rounded transition-colors duration-200 hover:bg-surface-active-alt focus:translate-x-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
+                            'flex h-7 w-7 items-center justify-center rounded transition-colors duration-200 hover:bg-surface-active-alt focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
                                 isExpanded && 'bg-surface-active-alt',
                               )}
                               aria-hidden="true"
@@ -265,20 +255,15 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
                           <OGDialogTrigger asChild>
                             <button
                               type="button"
-                              className={cn(
-                                'flex h-7 w-7 items-center justify-center rounded transition-colors duration-200',
-                                'hover:bg-surface-active-alt focus:translate-x-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
-                              )}
+                          className="flex h-7 w-7 items-center justify-center rounded transition-colors duration-200 hover:bg-surface-active-alt focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                               onClick={(e) => e.stopPropagation()}
                               aria-label={`Delete ${currentServerName}`}
                               tabIndex={0}
                               onFocus={() => setIsFocused(true)}
                             >
-                              <TrashIcon className="h-4 w-4" />
+                          <TrashIcon className="h-4 w-4 text-red-500" />
                             </button>
                           </OGDialogTrigger>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>

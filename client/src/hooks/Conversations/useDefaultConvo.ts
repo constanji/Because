@@ -7,7 +7,7 @@ import type {
   TPreset,
 } from '@aipyq/data-provider';
 import { getDefaultEndpoint, buildDefaultConvo } from '~/utils';
-import { useGetEndpointsQuery } from '~/data-provider';
+import { useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
 
 type TDefaultConvo = {
   conversation: Partial<TConversation>;
@@ -21,6 +21,7 @@ const exceptions = new Set(['spec', 'iconURL']);
 const useDefaultConvo = () => {
   const { data: endpointsConfig = {} as TEndpointsConfig } = useGetEndpointsQuery();
   const { data: modelsConfig = {} as TModelsConfig } = useGetModelsQuery();
+  const { data: startupConfig } = useGetStartupConfig();
 
   const getDefaultConversation = ({
     conversation: _convo,
@@ -31,6 +32,7 @@ const useDefaultConvo = () => {
     const endpoint = getDefaultEndpoint({
       convoSetup: preset as TPreset,
       endpointsConfig,
+      startupConfig,
     });
 
     const models = modelsConfig[endpoint ?? ''] || [];
@@ -52,6 +54,7 @@ const useDefaultConvo = () => {
       endpoint,
       lastConversationSetup: preset as TConversation,
       models,
+      startupConfig,
     });
 
     if (!cleanOutput) {

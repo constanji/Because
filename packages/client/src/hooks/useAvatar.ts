@@ -1,43 +1,15 @@
 import { useMemo } from 'react';
-import { createAvatar } from '@dicebear/core';
-import { initials } from '@dicebear/collection';
 import type { TUser } from '@aipyq/data-provider';
-
-const avatarCache: Record<string, string> = {};
 
 const useAvatar = (user: TUser | undefined) => {
   return useMemo(() => {
-    const { username, name } = user ?? {};
-    const seed = name || username;
-    if (!seed) {
-      return '';
-    }
-
+    // 如果用户有配置的头像，直接返回
     if (user?.avatar && user?.avatar !== '') {
       return user.avatar;
     }
 
-    if (avatarCache[seed]) {
-      return avatarCache[seed];
-    }
-
-    const avatar = createAvatar(initials, {
-      seed,
-      fontFamily: ['Verdana'],
-      fontSize: 36,
-    });
-
-    let avatarDataUri = '';
-    try {
-      avatarDataUri = avatar.toDataUri();
-      if (avatarDataUri) {
-        avatarCache[seed] = avatarDataUri;
-      }
-    } catch (error) {
-      console.error('Failed to generate avatar:', error);
-    }
-
-    return avatarDataUri;
+    // 如果用户没有配置头像，统一使用logo.png作为默认头像
+    return '/assets/logo.png';
   }, [user]);
 };
 

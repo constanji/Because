@@ -5,7 +5,7 @@ import { IThemeRGB } from '../types';
  * Atom for storing the theme mode (light/dark/system) in localStorage
  * Key: 'color-theme'
  */
-export const themeModeAtom = atomWithStorage<string>('color-theme', 'system', undefined, {
+export const themeModeAtom = atomWithStorage<string>('color-theme', 'dark', undefined, {
   getOnInit: true,
 });
 

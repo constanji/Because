@@ -134,13 +134,21 @@
     }
   },
   "nodemonConfig": {
+    "watch": [
+      "api"
+    ],
     "ignore": [
       "api/data/",
       "data/",
       "client/",
       "admin/",
-      "packages/"
-    ]
+      "packages/",
+      "*.test.js",
+      "*.spec.js"
+    ],
+    "ext": "js,json",
+    "delay": 500,
+    "legacyWatch": false
   },
   "peerDependencies": {
     "@aipyq/agents": "file:agents-Aipyq"

@@ -51,7 +51,9 @@ export const useMCPConnectionStatusQuery = (
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
       refetchOnMount: false,
-      staleTime: 10000, // 10 seconds
+      staleTime: 30000, // 30 seconds - 延长 staleTime，减少自动刷新
+      // 使用 keepPreviousData 避免数据更新时重置 UI
+      keepPreviousData: true,
       ...config,
     },
   );

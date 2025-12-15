@@ -104,26 +104,9 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
         !assistantMap?.[endpoint ?? '']?.[conversation?.assistant_id ?? '']),
     [conversation?.assistant_id, endpoint, assistantMap],
   );
-  // 检查是否是新对话且没有选择智能体/助手的情况（与 ConvoIcon.tsx 中的 shouldShowDefaultLogo 逻辑一致）
-  const shouldDisableForNoAgent = useMemo(
-    () => {
-      const hasNoAgent = !conversation?.agent_id;
-      const hasNoAssistant = !conversation?.assistant_id;
-      const isNewConversation = conversationId === Constants.NEW_CONVO;
-      const hasNoIconURL = !conversation?.iconURL;
-      const isLandingPage = !conversation?.messages || conversation.messages.length === 0;
-      
-      return isNewConversation && 
-             isLandingPage && 
-             hasNoAgent && 
-             hasNoAssistant && 
-             hasNoIconURL;
-    },
-    [conversationId, conversation?.agent_id, conversation?.assistant_id, conversation?.iconURL, conversation?.messages],
-  );
   const disableInputs = useMemo(
-    () => requiresKey || invalidAssistant || shouldDisableForNoAgent,
-    [requiresKey, invalidAssistant, shouldDisableForNoAgent],
+    () => requiresKey || invalidAssistant,
+    [requiresKey, invalidAssistant],
   );
 
   const handleContainerClick = useCallback(() => {
@@ -232,7 +215,7 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
           !isSubmitting &&
           conversation?.messages?.length === 0
           ? 'transition-all duration-200 sm:mb-28'
-          : 'sm:mb-10',
+          : 'sm:mb-0',
       )}
     >
       <div className="relative flex h-full flex-1 items-stretch md:flex-col">

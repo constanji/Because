@@ -1,7 +1,7 @@
 import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import { useToastContext } from '@aipyq/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { Constants, QueryKeys, SystemRoles } from '@aipyq/data-provider';
+import { Constants, QueryKeys } from '@aipyq/data-provider';
 import {
   useCancelMCPOAuthMutation,
   useUpdateUserPluginsMutation,
@@ -9,7 +9,7 @@ import {
 } from '@aipyq/data-provider/react-query';
 import type { TUpdateUserPlugins, TPlugin, MCPServersResponse } from '@aipyq/data-provider';
 import type { ConfigFieldDetail } from '~/common';
-import { useLocalize, useMCPSelect, useMCPConnectionStatus, useAuthContext } from '~/hooks';
+import { useLocalize, useMCPSelect, useMCPConnectionStatus } from '~/hooks';
 import { useGetStartupConfig } from '~/data-provider';
 
 interface ServerState {
@@ -26,7 +26,6 @@ export function useMCPServerManager({ conversationId }: { conversationId?: strin
   const { showToast } = useToastContext();
   const { data: startupConfig } = useGetStartupConfig();
   const { mcpValues, setMCPValues, isPinned, setIsPinned } = useMCPSelect({ conversationId });
-  const { user } = useAuthContext();
 
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [selectedToolForConfig, setSelectedToolForConfig] = useState<TPlugin | null>(null);
@@ -38,22 +37,12 @@ export function useMCPServerManager({ conversationId }: { conversationId?: strin
     mcpValuesRef.current = mcpValues;
   }, [mcpValues]);
 
-  // 检查用户是否为管理员
-  const isAdmin = user?.role === SystemRoles.ADMIN;
-
   const configuredServers = useMemo(() => {
-    // 只有管理员可以看到 MCP 服务器选择列表，普通用户隐藏
-    if (!isAdmin) {
-      console.log('[MCP] 用户不是管理员，隐藏 MCP 服务器列表', { userRole: user?.role, isAdmin });
-      return [];
-    }
-    // 管理员正常显示
-    console.log('[MCP] 管理员用户，显示 MCP 服务器列表', { userRole: user?.role, isAdmin });
     if (!startupConfig?.mcpServers) return [];
     return Object.entries(startupConfig.mcpServers)
       .filter(([, config]) => config.chatMenu !== false)
       .map(([serverName]) => serverName);
-  }, [startupConfig?.mcpServers, isAdmin, user?.role]);
+  }, [startupConfig?.mcpServers]);
 
   const reinitializeMutation = useReinitializeMCPServerMutation();
   const cancelOAuthMutation = useCancelMCPOAuthMutation();

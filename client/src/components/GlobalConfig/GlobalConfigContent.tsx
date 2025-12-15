@@ -8,15 +8,16 @@ import MCPManagement from './MCPManagement';
 import EndpointsConfig from './EndpointsConfig';
 import UsersManagement from './UsersManagement';
 import FeaturesManagement from './FeaturesManagement';
+import MarketplaceContent from './MarketplaceContent';
 
 interface GlobalConfigContentProps {
   startupConfig?: TStartupConfig;
 }
 
-type TabType = 'modelSpecs' | 'agents' | 'mcp' | 'users' | 'features';
+type TabType = 'modelSpecs' | 'agents' | 'mcp' | 'users' | 'features' | 'marketplace';
 
 const isValidTab = (tab: string | null): tab is TabType => {
-  return tab === 'modelSpecs' || tab === 'agents' || tab === 'mcp' || tab === 'users' || tab === 'features';
+  return tab === 'modelSpecs' || tab === 'agents' || tab === 'mcp' || tab === 'users' || tab === 'features' || tab === 'marketplace';
 };
 
 export default function GlobalConfigContent({ startupConfig: propStartupConfig }: GlobalConfigContentProps) {
@@ -44,12 +45,17 @@ export default function GlobalConfigContent({ startupConfig: propStartupConfig }
     {
       id: 'modelSpecs',
       label: '端点配置',
-      description: '管理自定义端点配置，这些配置将添加到 Aipyq.yaml 文件中',
+      description: '管理自定义端点配置',
     },
     {
       id: 'agents',
       label: '智能体管理',
       description: '管理所有智能体，设置是否展示给用户',
+    },
+    {
+      id: 'marketplace',
+      label: '智能体市场',
+      description: '浏览和发现智能体',
     },
     {
       id: 'mcp',
@@ -63,8 +69,8 @@ export default function GlobalConfigContent({ startupConfig: propStartupConfig }
     },
     {
       id: 'features',
-      label: '启用功能管理',
-      description: '管理界面功能的启用和禁用',
+      label: '初始界面配置',
+      description: '管理初始界面的欢迎语和模型',
     },
   ];
 
@@ -94,12 +100,37 @@ export default function GlobalConfigContent({ startupConfig: propStartupConfig }
       </div>
 
       {/* 标签页内容 */}
-      <div className="flex-1 overflow-hidden px-4 py-4">
-        {activeTab === 'modelSpecs' && <EndpointsConfig startupConfig={startupConfig} />}
-        {activeTab === 'agents' && <AgentsManagement />}
-        {activeTab === 'mcp' && <MCPManagement startupConfig={startupConfig} />}
-        {activeTab === 'users' && <UsersManagement />}
-        {activeTab === 'features' && <FeaturesManagement startupConfig={startupConfig} />}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'modelSpecs' && (
+          <div className="h-full overflow-hidden px-4 py-4">
+            <EndpointsConfig startupConfig={startupConfig} />
+          </div>
+        )}
+        {activeTab === 'agents' && (
+          <div className="h-full overflow-hidden px-4 py-4">
+            <AgentsManagement />
+          </div>
+        )}
+        {activeTab === 'marketplace' && (
+          <div className="h-full overflow-hidden">
+            <MarketplaceContent />
+          </div>
+        )}
+        {activeTab === 'mcp' && (
+          <div className="h-full overflow-hidden px-4 py-4" key="mcp-management">
+            <MCPManagement startupConfig={startupConfig} />
+          </div>
+        )}
+        {activeTab === 'users' && (
+          <div className="h-full overflow-hidden px-4 py-4">
+            <UsersManagement />
+          </div>
+        )}
+        {activeTab === 'features' && (
+          <div className="h-full overflow-hidden px-4 py-4">
+            <FeaturesManagement startupConfig={startupConfig} />
+          </div>
+        )}
       </div>
     </div>
   );

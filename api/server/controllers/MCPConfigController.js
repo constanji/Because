@@ -5,6 +5,8 @@ const { logger } = require('@aipyq/data-schemas');
 const { CacheKeys } = require('@aipyq/data-provider');
 const { getLogStores } = require('~/cache');
 const getConfigPath = require('~/server/utils/getConfigPath');
+const { mcpServersRegistry } = require('@aipyq/api');
+const { clearAppConfigCache } = require('~/server/services/Config/app');
 
 // 获取自定义 MCP 服务器配置
 async function getCustomMCPServersConfig(req, res) {
@@ -123,6 +125,26 @@ async function saveCustomMCPServersConfig(req, res) {
     // Clear the startup config cache
     const cache = getLogStores(CacheKeys.CONFIG_STORE);
     await cache.delete(CacheKeys.STARTUP_CONFIG);
+    
+    // Clear the app config cache to ensure getAppConfig() returns fresh config with new server
+    // This is critical for connection status endpoint to include newly added servers
+    try {
+      await clearAppConfigCache();
+      logger.info(`[MCP Config] Cleared app config cache after saving server "${serverName}"`);
+    } catch (error) {
+      logger.warn(`[MCP Config] Failed to clear app config cache: ${error.message}`);
+      // Don't fail the request if cache clear fails, config is saved to file
+    }
+
+    // Update mcpServersRegistry rawConfigs so the new server is immediately available
+    // This ensures that reinitialize endpoint can find the server config without requiring a server restart
+    try {
+      mcpServersRegistry.setRawConfigs(config.mcpServers || {});
+      logger.info(`[MCP Config] Updated registry rawConfigs with server "${serverName}"`);
+    } catch (error) {
+      logger.warn(`[MCP Config] Failed to update registry rawConfigs: ${error.message}`);
+      // Don't fail the request if registry update fails, config is saved to file
+    }
 
     logger.info(`MCP server "${serverName}" ${config.mcpServers[serverName] ? 'updated' : 'added'} successfully`);
 
@@ -192,6 +214,26 @@ async function deleteCustomMCPServersConfig(req, res) {
     // Clear the startup config cache
     const cache = getLogStores(CacheKeys.CONFIG_STORE);
     await cache.delete(CacheKeys.STARTUP_CONFIG);
+    
+    // Clear the app config cache to ensure getAppConfig() returns fresh config without deleted server
+    // This is critical for connection status endpoint to exclude deleted servers
+    try {
+      await clearAppConfigCache();
+      logger.info(`[MCP Config] Cleared app config cache after deleting server "${serverName}"`);
+    } catch (error) {
+      logger.warn(`[MCP Config] Failed to clear app config cache: ${error.message}`);
+      // Don't fail the request if cache clear fails, config is saved to file
+    }
+
+    // Update mcpServersRegistry rawConfigs to remove the deleted server
+    // This ensures the server is immediately unavailable without requiring a server restart
+    try {
+      mcpServersRegistry.setRawConfigs(config.mcpServers || {});
+      logger.info(`[MCP Config] Updated registry rawConfigs after deleting server "${serverName}"`);
+    } catch (error) {
+      logger.warn(`[MCP Config] Failed to update registry rawConfigs: ${error.message}`);
+      // Don't fail the request if registry update fails, config is saved to file
+    }
 
     logger.info(`MCP server "${serverName}" deleted successfully`);
 

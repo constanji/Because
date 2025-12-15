@@ -49,6 +49,7 @@ async function reinitMCPServer({
         oauthRequired = true;
       });
 
+    let connectionError = null;
     try {
       connection = await mcpManager.getConnection({
         user,
@@ -92,6 +93,8 @@ async function reinitMCPServer({
           `[MCP Reinitialize] Error initializing MCP server ${serverName} for user:`,
           err,
         );
+        // 保存错误消息以便在响应中返回
+        connectionError = err.message || String(err);
       }
     }
 
@@ -114,6 +117,10 @@ async function reinitMCPServer({
       }
       if (connection) {
         return `MCP server '${serverName}' reinitialized successfully`;
+      }
+      // 如果有连接错误，返回错误消息；否则返回通用失败消息
+      if (connectionError) {
+        return connectionError;
       }
       return `Failed to reinitialize MCP server '${serverName}'`;
     };

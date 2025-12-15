@@ -111,6 +111,25 @@ https://www.aipyq.com/docs/configuration/stt_tts`);
       logger.info(JSON.stringify(customConfig, null, 2));
       logger.debug('Custom config:', customConfig);
     }
+    // 添加日志，检查 interface.defaultEndpoint 和 defaultModel
+    // 注意：loadCustomConfig 返回的是 customConfig（原始配置），而不是 result.data（验证后的数据）
+    // 所以我们需要检查 customConfig.interface，而不是 result.data.interface
+    if (customConfig?.interface) {
+      logger.info('[loadCustomConfig] Interface config from customConfig:', {
+        defaultEndpoint: customConfig.interface.defaultEndpoint,
+        defaultModel: customConfig.interface.defaultModel,
+        customWelcome: customConfig.interface.customWelcome,
+      });
+    }
+    if (result.data?.interface) {
+      logger.info('[loadCustomConfig] Interface config from result.data:', {
+        defaultEndpoint: result.data.interface.defaultEndpoint,
+        defaultModel: result.data.interface.defaultModel,
+        customWelcome: result.data.interface.customWelcome,
+      });
+    } else {
+      logger.warn('[loadCustomConfig] No interface config found in result.data');
+    }
   }
 
   (customConfig.endpoints?.custom ?? [])
@@ -119,6 +138,35 @@ https://www.aipyq.com/docs/configuration/stt_tts`);
 
   if (result.data.modelSpecs) {
     customConfig.modelSpecs = result.data.modelSpecs;
+  }
+
+  // 确保 interface 配置从 result.data 中获取（验证后的数据），而不是原始 customConfig
+  // 这样可以确保所有字段都符合 schema
+  // 特别保留 defaultEndpoint 和 defaultModel，因为它们可能在 schema 验证时被移除
+  if (result.data?.interface || customConfig.interface) {
+    // 首先保存原始配置中的关键字段值（在合并前保存）
+    const originalDefaultEndpoint = customConfig.interface?.defaultEndpoint;
+    const originalDefaultModel = customConfig.interface?.defaultModel;
+    const originalCustomWelcome = customConfig.interface?.customWelcome;
+    
+    // 获取验证后的 interface 配置
+    const validatedInterface = result.data?.interface || {};
+    
+    // 合并配置：先使用验证后的数据（但不包括 undefined 值），然后用原始值明确覆盖关键字段
+    customConfig.interface = {
+      ...customConfig.interface,
+      // 只合并验证后的非 undefined 字段
+      ...Object.fromEntries(
+        Object.entries(validatedInterface).filter(([_, value]) => value !== undefined)
+      ),
+      // 确保这些关键字段优先使用原始配置中的值（如果存在）
+      ...(originalDefaultEndpoint !== undefined && originalDefaultEndpoint !== null && { defaultEndpoint: originalDefaultEndpoint }),
+      ...(originalDefaultModel !== undefined && originalDefaultModel !== null && { defaultModel: originalDefaultModel }),
+      ...(originalCustomWelcome !== undefined && originalCustomWelcome !== null && { customWelcome: originalCustomWelcome }),
+    };
+    logger.info(
+      `[loadCustomConfig] Merged interface config: defaultEndpoint=${customConfig.interface.defaultEndpoint}, defaultModel=${customConfig.interface.defaultModel}, originalDefaultEndpoint=${originalDefaultEndpoint}, originalDefaultModel=${originalDefaultModel}, validatedInterfaceKeys=${Object.keys(validatedInterface).join(',')}, validatedInterfaceDefaultEndpoint=${validatedInterface.defaultEndpoint}, validatedInterfaceDefaultModel=${validatedInterface.defaultModel}`,
+    );
   }
 
   return customConfig;

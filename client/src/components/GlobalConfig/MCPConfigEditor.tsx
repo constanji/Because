@@ -42,7 +42,7 @@ export default function MCPConfigEditor({
       config: {
         type: 'streamable-http',
         url: '',
-        chatMenu: true,
+        chatMenu: false,
         startup: false,
         customUserVars: {},
       },
@@ -57,7 +57,15 @@ export default function MCPConfigEditor({
 
   const onSubmit = async (data: MCPServerConfig) => {
     try {
-      await onSave(data);
+      // 确保chatMenu有默认值false
+      const configData = {
+        ...data,
+        config: {
+          ...data.config,
+          chatMenu: data.config.chatMenu ?? false,
+        },
+      };
+      await onSave(configData);
       showToast({
         message: server ? 'MCP服务器配置更新成功' : 'MCP服务器配置创建成功',
         status: 'success',
@@ -171,8 +179,8 @@ export default function MCPConfigEditor({
               </div>
             </div>
 
-            {/* 可选配置 */}
-            <div className="rounded-lg border border-border-light bg-surface-primary p-6">
+            {/* 可选配置 - 已隐藏 */}
+            {/* <div className="rounded-lg border border-border-light bg-surface-primary p-6">
               <h4 className="mb-6 text-base font-semibold text-text-primary">可选配置</h4>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -182,7 +190,7 @@ export default function MCPConfigEditor({
                     render={({ field }) => (
                       <input
                         type="checkbox"
-                        checked={field.value ?? true}
+                        checked={field.value ?? false}
                         onChange={field.onChange}
                         className="h-4 w-4 rounded border-border-light text-primary focus:ring-2 focus:ring-primary"
                       />
@@ -211,7 +219,7 @@ export default function MCPConfigEditor({
                   </label>
                 </div>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </form>

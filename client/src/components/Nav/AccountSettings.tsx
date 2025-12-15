@@ -98,7 +98,7 @@ function AccountSettings() {
             className="select-item text-sm"
           >
             <SettingsIcon className="icon-md" aria-hidden="true" />
-            全局配置管理
+            Agent平台
           </Select.SelectItem>
         )}
         <DropdownMenuSeparator />

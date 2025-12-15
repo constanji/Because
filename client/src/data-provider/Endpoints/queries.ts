@@ -29,7 +29,18 @@ export const useGetStartupConfig = (
   const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
   return useQuery<t.TStartupConfig>(
     [QueryKeys.startupConfig],
-    () => dataService.getStartupConfig(),
+    async () => {
+      const result = await dataService.getStartupConfig();
+      // 添加日志，调试配置获取
+      console.log('[useGetStartupConfig] Fetched startup config:', {
+        hasInterface: !!result?.interface,
+        defaultEndpoint: result?.interface?.defaultEndpoint,
+        defaultModel: result?.interface?.defaultModel,
+        interfaceKeys: result?.interface ? Object.keys(result.interface) : [],
+        fullInterface: JSON.stringify(result?.interface, null, 2),
+      });
+      return result;
+    },
     {
       staleTime: Infinity,
       refetchOnWindowFocus: false,

@@ -23,20 +23,18 @@ const Avatar: React.FC<AvatarProps> = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  const avatarSeed = useMemo(
-    () => user?.avatar || user?.username || user?.email || '',
-    [user?.avatar, user?.username, user?.email],
-  );
-
   const altText = useMemo(
     () => alt || `${user?.name || user?.username || user?.email || ''}'s avatar`,
     [alt, user?.name, user?.username, user?.email],
   );
 
+  // 直接使用useAvatar返回的值，它已经处理了所有逻辑（有头像用头像，没有头像用logo.png）
   const imageSrc = useMemo(() => {
-    if (!avatarSeed || imageError) return '';
-    return (user?.avatar ?? '') || avatarSrc || '';
-  }, [user?.avatar, avatarSrc, avatarSeed, imageError]);
+    if (imageError) {
+      return '/assets/logo.png';
+    }
+    return avatarSrc || '/assets/logo.png';
+  }, [avatarSrc, imageError]);
 
   const handleImageLoad = useCallback(() => {
     setImageLoaded(true);
@@ -65,11 +63,8 @@ const Avatar: React.FC<AvatarProps> = ({
     [size, className],
   );
 
-  if (avatarSeed.length === 0 && showDefaultWhenEmpty) {
-    return <DefaultAvatar />;
-  }
-
-  if (avatarSeed.length > 0 && !imageError) {
+  // 如果useAvatar返回了值（头像或logo.png），显示图片
+  if (avatarSrc && !imageError) {
     return (
       <div className="relative" style={{ width: `${size}px`, height: `${size}px` }}>
         {!imageLoaded && (
@@ -92,8 +87,27 @@ const Avatar: React.FC<AvatarProps> = ({
     );
   }
 
+  // 如果图片加载错误，显示默认图标
   if (imageError && showDefaultWhenEmpty) {
     return <DefaultAvatar />;
+  }
+
+  // 如果没有avatarSrc，显示logo.png
+  if (showDefaultWhenEmpty) {
+    return (
+      <div className="relative" style={{ width: `${size}px`, height: `${size}px` }}>
+        <img
+          style={{
+            width: `${size}px`,
+            height: `${size}px`,
+          }}
+          className={`rounded-full ${className}`}
+          src="/assets/logo.png"
+          alt={altText}
+          onError={handleImageError}
+        />
+      </div>
+    );
   }
 
   return null;

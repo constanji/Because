@@ -76,9 +76,9 @@ export default function GlobalConfigManager() {
               <div className="mb-4 px-4 pt-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h1 className="text-2xl font-semibold text-text-primary">全局配置管理</h1>
+                    <h1 className="text-2xl font-semibold text-text-primary">Agent平台</h1>
                     <p className="mt-1 text-sm text-text-secondary">
-                      配置前端主页可供选择的端点/模型列表，以及管理智能体
+                      配置端点/模型列表，以及管理智能体和工具
                     </p>
                   </div>
                   <button

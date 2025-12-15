@@ -161,7 +161,7 @@ export default function AgentsList({ toggleNav }: AgentsListProps) {
   return (
     <div className="mb-4 border-t border-border-light pt-4">
       <div className="mb-2 px-2">
-        <h2 className="text-sm font-semibold text-text-primary">智能体应用推荐</h2>
+        <h2 className="text-sm font-semibold text-text-primary">智能体</h2>
       </div>
       <div className="rounded-lg border border-border-light bg-surface-secondary p-2">
         {agents.length === 0 ? (

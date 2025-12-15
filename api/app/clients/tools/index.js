@@ -15,6 +15,7 @@ const TavilySearchResults = require('./structured/TavilySearchResults');
 const Speckit = require('./structured/Speckit');
 const SocialMedia = require('./structured/SocialMedia');
 const BaziAstrology = require('./structured/BaziAstrology');
+const DatabaseSchema = require('./structured/DatabaseSchema');
 
 module.exports = {
   ...manifest,
@@ -33,4 +34,5 @@ module.exports = {
   Speckit,
   SocialMedia,
   BaziAstrology,
+  DatabaseSchema,
 };

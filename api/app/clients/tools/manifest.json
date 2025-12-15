@@ -181,6 +181,13 @@
     ]
   },
   {
+    "name": "Database Schema",
+    "pluginKey": "database_schema",
+    "description": "获取数据库表结构信息。可以获取所有表的Schema，或指定单个表的详细结构。返回的信息包括表名、列名、数据类型、是否可空、主键、索引等，用于生成准确的SQL查询。",
+    "icon": "https://raw.githubusercontent.com/constanji/aipyq-assets/main/icons/database.png",
+    "authConfig": []
+  },
+  {
     "name": "Speckit",
     "pluginKey": "speckit",
     "description": "Spec-Driven Development toolkit for creating specifications, plans, and tasks. Commands: specify, plan, tasks, implement, clarify, analyze, checklist, constitution.",

@@ -146,9 +146,9 @@ export default function UsersManagement() {
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'ADMIN':
-        return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
+        return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
       case 'USER':
-        return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+        return 'bg-white-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
     }
@@ -536,29 +536,30 @@ export default function UsersManagement() {
             <p className="text-sm">暂无用户</p>
           </div>
         ) : (
-          <div className={cn('space-y-2', viewMode === 'compact' && 'grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3')}>
+          <div className={cn(viewMode === 'compact' ? 'grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3' : 'space-y-2')}>
             {users.map((user) => {
               if (viewMode === 'compact') {
                 // 表格视图：只显示头像、昵称、用户名、身份
                 return (
                   <div
                     key={user._id}
-                    className="relative rounded-lg border border-border-light bg-surface-primary p-3 pr-20 pt-4"
+                    className="relative rounded-lg border border-border-light bg-surface-primary p-3 pr-20"
                   >
                     <div className="flex items-center gap-3">
                       {/* 头像 */}
                       <div className="flex-shrink-0">
-                        {user.avatar ? (
-                          <img
-                            src={user.avatar}
-                            alt={user.name || user.email}
-                            className="h-10 w-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-                            <UserIcon className="h-5 w-5 text-text-secondary" />
-                          </div>
-                        )}
+                        <img
+                          src={user.avatar || '/assets/logo.png'}
+                          alt={user.name || user.email}
+                          className="h-10 w-10 rounded-full object-cover"
+                          onError={(e) => {
+                            // 如果头像加载失败，使用logo.png
+                            const target = e.target as HTMLImageElement;
+                            if (target.src !== `${window.location.origin}/assets/logo.png`) {
+                              target.src = '/assets/logo.png';
+                            }
+                          }}
+                        />
                       </div>
                       {/* 用户信息 */}
                       <div className="flex-1 min-w-0">
@@ -566,14 +567,16 @@ export default function UsersManagement() {
                           <h4 className="text-sm font-semibold text-text-primary line-clamp-1">
                             {user.name || '未设置昵称'}
                           </h4>
-                          <span
-                            className={cn(
-                              'rounded-xl px-2 py-0.5 text-xs font-medium',
-                              getRoleColor(user.role),
-                            )}
-                          >
-                            {getRoleLabel(user.role)}
-                          </span>
+                          {user.role === 'ADMIN' && (
+                            <span
+                              className={cn(
+                                'rounded-xl px-2 py-0.5 text-xs font-medium',
+                                getRoleColor(user.role),
+                              )}
+                            >
+                              {getRoleLabel(user.role)}
+                            </span>
+                          )}
                         </div>
                         {user.username && (
                           <p className="mt-1 text-xs text-text-secondary line-clamp-1">
@@ -619,17 +622,18 @@ export default function UsersManagement() {
                   <div className="flex items-start gap-4">
                     {/* 头像 */}
                     <div className="flex-shrink-0">
-                      {user.avatar ? (
-                        <img
-                          src={user.avatar}
-                          alt={user.name || user.email}
-                          className="h-12 w-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-secondary">
-                          <UserIcon className="h-6 w-6 text-text-secondary" />
-                        </div>
-                      )}
+                      <img
+                        src={user.avatar || '/assets/logo.png'}
+                        alt={user.name || user.email}
+                        className="h-12 w-12 rounded-full object-cover"
+                        onError={(e) => {
+                          // 如果头像加载失败，使用logo.png
+                          const target = e.target as HTMLImageElement;
+                          if (target.src !== `${window.location.origin}/assets/logo.png`) {
+                            target.src = '/assets/logo.png';
+                          }
+                        }}
+                      />
                     </div>
 
                     {/* 用户信息 */}
@@ -639,14 +643,16 @@ export default function UsersManagement() {
                           <h3 className="text-base font-semibold text-text-primary">
                             {user.name || user.username || '未设置名称'}
                           </h3>
-                          <span
-                            className={cn(
-                              'rounded-xl px-2 py-0.5 text-xs font-medium',
-                              getRoleColor(user.role),
-                            )}
-                          >
-                            {getRoleLabel(user.role)}
-                          </span>
+                          {user.role === 'ADMIN' && (
+                            <span
+                              className={cn(
+                                'rounded-xl px-2 py-0.5 text-xs font-medium',
+                                getRoleColor(user.role),
+                              )}
+                            >
+                              {getRoleLabel(user.role)}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <button

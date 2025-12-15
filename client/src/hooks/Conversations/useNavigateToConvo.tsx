@@ -85,9 +85,11 @@ const useNavigateToConvo = (index = 0) => {
     if (!convo.endpoint || !endpointsConfig?.[convo.endpoint]) {
       /* undefined/removed endpoint edge case */
       const modelsConfig = queryClient.getQueryData<TModelsConfig>([QueryKeys.models]);
+      const startupConfig = queryClient.getQueryData<TStartupConfig>([QueryKeys.startupConfig]);
       const defaultEndpoint = getDefaultEndpoint({
         convoSetup: conversation,
         endpointsConfig,
+        startupConfig,
       });
 
       const endpointType = getEndpointField(endpointsConfig, defaultEndpoint, 'type');
@@ -102,6 +104,7 @@ const useNavigateToConvo = (index = 0) => {
         conversation,
         endpoint: defaultEndpoint,
         lastConversationSetup: conversation,
+        startupConfig,
       });
     }
     clearAllConversations(true);

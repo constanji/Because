@@ -3,7 +3,7 @@ services:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    image: aipyqchat:latest  # 使用已加载的镜像
+    image: aipyq:latest  # 使用已加载的镜像
     container_name: Aipyq-API
     ports:
       - 3080:3080

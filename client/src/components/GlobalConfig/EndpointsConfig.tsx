@@ -397,7 +397,7 @@ export default function EndpointsConfig({ startupConfig: propStartupConfig }: En
         <div>
           <h2 className="text-lg font-semibold text-text-primary">端点配置</h2>
           <p className="mt-1 text-sm text-text-primary">
-            管理自定义端点配置，这些配置将添加到 Aipyq.yaml 文件中
+            管理自定义端点配置
           </p>
         </div>
         <Button

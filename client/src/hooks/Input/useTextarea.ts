@@ -78,23 +78,6 @@ export default function useTextarea({
     }
 
     const getPlaceholderText = () => {
-      // 优先检查是否是因为没有选择智能体/助手而禁用（新对话且没有选择智能体的情况）
-      const hasNoAgent = !conversation?.agent_id;
-      const hasNoAssistant = !conversation?.assistant_id;
-      const isNewConversation = conversation?.conversationId === Constants.NEW_CONVO;
-      const hasNoIconURL = !conversation?.iconURL;
-      const isLandingPage = !conversation?.messages || conversation.messages.length === 0;
-      const shouldDisableForNoAgent = 
-        isNewConversation && 
-        isLandingPage && 
-        hasNoAgent && 
-        hasNoAssistant && 
-        hasNoIconURL;
-      
-      if (disabled && shouldDisableForNoAgent) {
-        return localize('com_ui_select_agent_first');
-      }
-      
       if (disabled) {
         return localize('com_endpoint_config_placeholder');
       }

@@ -85,14 +85,12 @@ export default function Header() {
               !isSmallScreen ? 'transition-all duration-200 ease-in-out' : ''
             } ${!navVisible ? 'translate-x-0' : 'translate-x-[-100px]'}`}
           >
-            {/* 管理员：显示完整模型选择器 */}
-            {isAdmin && (
+            {/* 管理员：显示完整模型选择器 - 已隐藏 */}
+            {/* {isAdmin && (
               <>
-            <ModelSelector startupConfig={startupConfig} />
-            {/* 隐藏预设按钮 */}
-            {/* {interfaceConfig.presets === true && interfaceConfig.modelSelect && <PresetsMenu />} */}
+                <ModelSelector startupConfig={startupConfig} />
               </>
-            )}
+            )} */}
             {/* 普通用户：隐藏当前 Agent 名称显示 */}
             {/* {!isAdmin && (
               <div className="my-1 flex h-10 w-full max-w-[70vw] items-center justify-center gap-2 rounded-xl border border-border-light bg-surface-secondary px-3 py-2 text-sm text-text-primary">

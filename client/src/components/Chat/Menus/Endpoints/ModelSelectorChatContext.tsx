@@ -12,7 +12,7 @@ interface ModelSelectorChatContextValue {
   newConversation: ReturnType<typeof useChatContext>['newConversation'];
 }
 
-const ModelSelectorChatContext = createContext<ModelSelectorChatContextValue | undefined>(
+export const ModelSelectorChatContext = createContext<ModelSelectorChatContextValue | undefined>(
   undefined,
 );
 

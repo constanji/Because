@@ -45,13 +45,12 @@ const UserAvatar = memo(({ size, user, avatarSrc, username, className }: UserAva
       }}
       className={cn('relative flex items-center justify-center', className ?? '')}
     >
-      {(!(user?.avatar ?? '') && (!(user?.username ?? '') || user?.username.trim() === '')) ||
-      imageError ? (
+      {imageError ? (
         renderDefaultAvatar()
       ) : (
         <img
           className="rounded-full"
-          src={(user?.avatar ?? '') || avatarSrc}
+          src={(user?.avatar ?? '') || avatarSrc || '/assets/logo.png'}
           alt="avatar"
           onError={handleImageError}
         />

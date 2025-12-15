@@ -98,14 +98,17 @@ function MCPSelectContent() {
 }
 
 function MCPSelect() {
-  const { mcpServerManager } = useBadgeRowContext();
-  const { configuredServers } = mcpServerManager;
+  // 隐藏 MCP 服务器选择列表
+  return null;
+  
+  // const { mcpServerManager } = useBadgeRowContext();
+  // const { configuredServers } = mcpServerManager;
 
-  if (!configuredServers || configuredServers.length === 0) {
-    return null;
-  }
+  // if (!configuredServers || configuredServers.length === 0) {
+  //   return null;
+  // }
 
-  return <MCPSelectContent />;
+  // return <MCPSelectContent />;
 }
 
 export default memo(MCPSelect);

@@ -78,7 +78,7 @@ export default function Footer({ className }: { className?: string }) {
           href={linkUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-text-secondary underline"
+          className="text-text-secondary"
         >
           {linkText}
         </a>
@@ -116,7 +116,7 @@ export default function Footer({ className }: { className?: string }) {
     const mainContentParts = (
       typeof config?.customFooter === 'string'
         ? config.customFooter
-        : 'AI 每日朋友圈  \n浙ICP备2021031999号-3  Copyright © 2025-2026 by [www.aipyq.com](https://www.aipyq.com). all rights reserved'
+        : 'AI 每日朋友圈  \n[浙ICP备2021031999号-3](https://beian.miit.gov.cn/)  Copyright © 2025-2026 Powered By [aipyq.com](aipyq.com). All Rights Reserved'
     ).split('|');
 
     const parts = mainContentParts.map((part) => part.trim()).filter(Boolean);

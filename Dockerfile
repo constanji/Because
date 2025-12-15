@@ -43,13 +43,22 @@ COPY --chown=node:node agents-Aipyq/husky-setup.js ./agents-Aipyq/husky-setup.js
 COPY --chown=node:node agents-Aipyq/src ./agents-Aipyq/src
 
 ENV HUSKY=0
-
-RUN \
-    cd agents-Aipyq && \
-    npm install --no-audit --omit=dev
+ENV CI=true
 
 # 若已在源码中包含 agents-Aipyq/dist，可直接复制到镜像中以跳过构建
 COPY --chown=node:node agents-Aipyq/dist ./agents-Aipyq/dist
+
+RUN \
+    cd agents-Aipyq && \
+    # 如果 dist 不存在或为空，则安装依赖并构建
+    if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then \
+      echo "Building agents-Aipyq (dist not found)..."; \
+      npm install --no-audit --omit=dev && \
+      DISABLE_SOURCEMAP=true NODE_OPTIONS="--max-old-space-size=8192" npm run build; \
+    else \
+      echo "Using existing dist directory, installing dependencies only..."; \
+      npm install --no-audit --omit=dev; \
+    fi
 
 # Now install all dependencies including the local agents-Aipyq package
 RUN npm ci --no-audit
@@ -57,21 +66,21 @@ RUN npm ci --no-audit
 COPY --chown=node:node . .
 
 # Build packages separately with increased memory limit
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 
 RUN \
     # Build data-provider first
-    npm run build:data-provider || (echo "Failed to build data-provider" && exit 1) && \
+    NODE_OPTIONS="--max-old-space-size=4096" npm run build:data-provider || (echo "Failed to build data-provider" && exit 1) && \
     # Build data-schemas
-    npm run build:data-schemas || (echo "Failed to build data-schemas" && exit 1) && \
+    NODE_OPTIONS="--max-old-space-size=4096" npm run build:data-schemas || (echo "Failed to build data-schemas" && exit 1) && \
     # Build api package with extra memory
-    npm run build:api || (echo "Failed to build api" && exit 1) && \
+    NODE_OPTIONS="--max-old-space-size=8192" npm run build:api || (echo "Failed to build api" && exit 1) && \
     # Verify api dist exists
     test -f packages/api/dist/index.js || (echo "packages/api/dist/index.js not found" && exit 1) && \
     # Build client-package
-    npm run build:client-package || (echo "Failed to build client-package" && exit 1) && \
+    NODE_OPTIONS="--max-old-space-size=4096" npm run build:client-package || (echo "Failed to build client-package" && exit 1) && \
     # Build client
-    cd client && npm run build || (echo "Failed to build client" && exit 1) && \
+    cd client && NODE_OPTIONS="--max-old-space-size=4096" npm run build || (echo "Failed to build client" && exit 1) && \
     cd .. && \
     # Prune and clean
     npm prune --production && \

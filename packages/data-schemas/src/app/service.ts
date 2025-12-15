@@ -62,6 +62,12 @@ export const AppService = async (params?: {
 
   const mcpConfig = config.mcpServers || null;
   const registration = config.registration ?? configDefaults.registration;
+  // 添加日志，调试传递给 loadDefaultInterface 的配置
+  console.log('[AppService] Before loadDefaultInterface:', {
+    configInterfaceDefaultEndpoint: config?.interface?.defaultEndpoint,
+    configInterfaceDefaultModel: config?.interface?.defaultModel,
+    configInterfaceKeys: config?.interface ? Object.keys(config.interface) : [],
+  });
   const interfaceConfig = await loadDefaultInterface({ config, configDefaults });
   const turnstileConfig = loadTurnstileConfig(config, configDefaults);
   const speech = config.speech;

@@ -268,7 +268,7 @@ export default function AgentsManagement() {
             </div>
           </div>
         ) : (
-          <div className={cn('space-y-2', viewMode === 'compact' && 'grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3')}>
+          <div className={cn(viewMode === 'compact' ? 'grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3' : 'space-y-2')}>
             {agents.map((agent) => (
               <AgentListItem
                 key={agent.id}
@@ -301,7 +301,7 @@ function AgentListItem({ agent, viewMode, onEdit, onDelete, onTogglePublic, isUp
   
   if (viewMode === 'compact') {
     return (
-      <div className="relative rounded-lg border border-border-light bg-surface-primary p-3 pr-10 pt-4">
+      <div className="relative rounded-lg border border-border-light bg-surface-primary p-3 pr-10">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0">
             {avatarUrl ? (

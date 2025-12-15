@@ -50,15 +50,12 @@ export default function UnconfiguredMCPTool({ serverName }: { serverName?: strin
         <OGDialogTrigger asChild>
           <button
             type="button"
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded transition-all duration-200 hover:bg-surface-active-alt focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
-              isHovering || isFocused ? 'opacity-100' : 'pointer-events-none opacity-0',
-            )}
+            className="flex h-7 w-7 items-center justify-center rounded transition-all duration-200 hover:bg-surface-active-alt focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
             aria-label={`Delete ${serverName}`}
             tabIndex={0}
             onFocus={() => setIsFocused(true)}
           >
-            <TrashIcon className="h-4 w-4" />
+            <TrashIcon className="h-4 w-4 text-red-500" />
           </button>
         </OGDialogTrigger>
       </div>

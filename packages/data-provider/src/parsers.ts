@@ -51,16 +51,7 @@ const endpointSchemas: Record<EndpointSchemaKey, EndpointSchema> = {
 /** Get the enabled endpoints from the `ENDPOINTS` environment variable */
 export function getEnabledEndpoints() {
   const defaultEndpoints: string[] = [
-    EModelEndpoint.openAI,
     EModelEndpoint.agents,
-    EModelEndpoint.assistants,
-    EModelEndpoint.azureAssistants,
-    EModelEndpoint.azureOpenAI,
-    EModelEndpoint.google,
-    EModelEndpoint.chatGPTBrowser,
-    EModelEndpoint.gptPlugins,
-    EModelEndpoint.anthropic,
-    EModelEndpoint.bedrock,
   ];
 
   const endpointsEnv = process.env.ENDPOINTS ?? '';
@@ -175,7 +166,11 @@ export const parseConvo = ({
   const { models, secondaryModels } = possibleValues ?? {};
 
   if (models && convo) {
-    convo.model = getFirstDefinedValue(models) ?? convo.model;
+    // 只有在 conversation.model 不存在或为空时，才使用 models 数组的第一个值
+    // 这样可以确保已设置的模型（如配置的默认模型）不会被覆盖
+    if (!convo.model || convo.model.trim() === '') {
+      convo.model = getFirstDefinedValue(models) ?? convo.model;
+    }
   }
 
   if (secondaryModels && convo?.agentOptions) {
@@ -348,7 +343,11 @@ export const parseCompactConvo = ({
   const { models } = possibleValues ?? {};
 
   if (models && convo) {
-    convo.model = getFirstDefinedValue(models) ?? convo.model;
+    // 只有在 conversation.model 不存在或为空时，才使用 models 数组的第一个值
+    // 这样可以确保已设置的模型（如配置的默认模型）不会被覆盖
+    if (!convo.model || convo.model.trim() === '') {
+      convo.model = getFirstDefinedValue(models) ?? convo.model;
+    }
   }
 
   // if (secondaryModels && convo.agentOptions) {

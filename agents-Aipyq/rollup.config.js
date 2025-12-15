@@ -12,7 +12,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === 'production';
-const disableSourcemap = process.env.DISABLE_SOURCEMAP === 'true' || process.env.CI === 'true';
 
 const excludedDirsInProd = [
   'src/scripts/',
@@ -38,7 +37,8 @@ export default {
       dir: 'dist/esm',
       format: 'es',
       entryFileNames: '[name].mjs',
-      sourcemap: !disableSourcemap,
+      // sourcemap: !isProduction,
+      sourcemap: true,
       preserveModules: true,
       preserveModulesRoot: 'src',
     },
@@ -46,7 +46,8 @@ export default {
       dir: 'dist/cjs',
       format: 'cjs',
       entryFileNames: '[name].cjs',
-      sourcemap: !disableSourcemap,
+      // sourcemap: !isProduction,
+      sourcemap: true,
       preserveModules: true,
       preserveModulesRoot: 'src',
       exports: 'named',
@@ -77,8 +78,10 @@ export default {
     typescript({
       tsconfig: isProduction ? './tsconfig.build.json' : './tsconfig.json',
       /* enable source maps for testing with other production options */
-      sourceMap: !disableSourcemap,
-      inlineSources: !disableSourcemap,
+      // sourceMap: !isProduction,
+      // inlineSources: !isProduction,
+      sourceMap: true,
+      inlineSources: true,
       outDir: null,
       declaration: false,
       exclude: [

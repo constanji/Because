@@ -9,7 +9,6 @@ import type t from '@aipyq/data-provider';
 import type { ContextType } from '~/common';
 import { useDocumentTitle, useHasAccess, useLocalize, TranslationKeys } from '~/hooks';
 import { useGetEndpointsQuery, useGetAgentCategoriesQuery } from '~/data-provider';
-import MarketplaceAdminSettings from './MarketplaceAdminSettings';
 import { SidePanelProvider, useChatContext } from '~/Providers';
 import { SidePanelGroup } from '~/components/SidePanel';
 import { OpenSidebar } from '~/components/Chat/Menus';
@@ -334,9 +333,6 @@ const AgentMarketplace: React.FC<AgentMarketplaceProps> = ({ className = '' }) =
                   {/* Search bar */}
                   <div className="mx-auto flex max-w-2xl gap-2 pb-6">
                     <SearchBar value={searchQuery} onSearch={handleSearch} />
-                    {/* TODO: Remove this once we have a better way to handle admin settings */}
-                    {/* Admin Settings */}
-                    <MarketplaceAdminSettings />
                   </div>
 
                   {/* Category tabs */}
