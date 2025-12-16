@@ -83,58 +83,104 @@
 
 ### 前置要求
 
-- Docker 和 Docker Compose
+- Node.js：推荐 v18+
+- npm：v7+（支持 workspaces）
 - Git
-- 至少 4GB 可用磁盘空间
+- Docker 与 Docker Compose（如使用 Docker 模式）
 
-### 快速部署
+### 方式一：本地直接运行（适合深入开发）
 
-1. **克隆项目**
+1. **根目录安装依赖**
    ```bash
-   
+   npm install
+   ```
+
+
+2. **构建共享包**
+   ```bash
+    # 构建所有共享包（按顺序）
+    npm run build:data-provider
+    npm run build:data-schemas
+    npm run build:api
+    npm run build:client-package
+    
+    # 或者一次性构建所有包
+    npm run build:packages
+    ```
+    
+2.5 **构建Agent包**
+    ```bash
+    cd agents-Aipyq
+    npm install           # 首次建议跑一下
+    npm run build:dev     # 生成 dist/esm 和 dist/cjs
+    ```
+
+3. **构建前端**
+   ```bash
+   cd client
+   npm run build
+   cd ..
+   ```
+
+4. **配置环境变量**
+   ```bash
+   cp .env.example .env
+   cp Aipyq.yaml.example Aipyq.yaml
+   # 按需编辑 .env，配置数据库、密钥等
+   ```
+
+5. **启动后端（终端 1）**
+   ```bash
+   npm run backend:dev
+   ```
+
+6. **启动前端（终端 2）**
+   ```bash
+   npm run frontend:dev
+   ```
+
+7. **默认访问地址**
+   - 开发前端：`http://localhost:3090`
+   - 后端 API：`http://localhost:3080`
+
+> **提示**：更详细的部署说明（包括生产模式、构建优化与常见问题），请查看 `docs/部署.md`。
+
+### 方式二：Docker 开发模式（测试版）
+
+1. **克隆项目并进入目录**
+   ```bash
+   git clone https://github.com/constanji/Aipyqchat
+   cd AipyqChat
    ```
 
 2. **配置环境变量**
    ```bash
    cp .env.example .env
-   # 编辑 .env 文件，设置必要的配置（JWT_SECRET、MEILI_MASTER_KEY 等）
+   cp Aipyq.yaml.example Aipyq.yaml
    ```
 
-3. **启动服务**
+3. **构建镜像并启动服务**
    ```bash
-   # 直接启动（推荐，最简单）
-   docker compose up -d
-   
-   # 查看容器状态
-   docker compose ps
-   
-   # 查看日志
-   docker compose logs -f api
+   # 第一次或修改 Dockerfile 后，先构建镜像
+   docker-compose -f docker-compose.dev.yml build
+   #docker-compose.dev.yml也可以选择生成环境的docker-compose.yml
+   # 然后启动所有服务（前端、后端、MongoDB、Meilisearch 等）
+   docker-compose -f docker-compose.dev.yml up -d
    ```
 
 4. **访问应用**
-   - 打开浏览器访问：`http://localhost:3080`（或你配置的端口）
+   - 前端（开发网关）：`http://localhost:3090`
+   - 后端 API：`http://localhost:3080`
 
-### 常用命令
+5. **查看 / 停止服务**
+   ```bash
+   # 查看日志
+   docker-compose -f docker-compose.dev.yml logs -f
 
-```bash
-# 启动服务
-docker compose up -d
-
-# 停止服务
-docker compose down
-
-# 停止并删除数据卷（清理所有数据）
-docker compose down -v
-
-# 查看日志
-docker compose logs -f api
-
-# 重启服务
-docker compose restart api
-```
-
-镜像构建准备最后再上传
+   # 停止服务
+   docker-compose -f docker-compose.dev.yml down
+   ```
+   
 
 ---
 
