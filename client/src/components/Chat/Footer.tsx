@@ -78,7 +78,7 @@ export default function Footer({ className }: { className?: string }) {
           href={linkUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-text-secondary"
+          className="text-green-500"
         >
           {linkText}
         </a>
