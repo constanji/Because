@@ -12,7 +12,8 @@ pids
 *.pid
 *.seed
 .git
-
+utils/
+!utils/docker/
 # CI/CD data
 test-image*
 
