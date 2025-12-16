@@ -4,7 +4,9 @@ import json from '@rollup/plugin-json';
 import replace from '@rollup/plugin-replace';
 import commonjs from '@rollup/plugin-commonjs';
 import resolve from '@rollup/plugin-node-resolve';
-import typescript from '@rollup/plugin-typescript';
+// Use rollup-plugin-typescript2 which supports check: false to skip type checking
+// This significantly reduces memory usage when processing large dependencies like @aipyq/agents
+import typescript from 'rollup-plugin-typescript2';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
@@ -30,22 +32,22 @@ const plugins = [
   }),
   typescript({
     tsconfig: './tsconfig.build.json',
-    outDir: './dist',
-    sourceMap: true,
+    useTsconfigDeclarationDir: true,
     /**
-     * Remove inline sourcemaps - they conflict with external sourcemaps
+     * Skip type checking to reduce memory usage when processing large dependencies
+     * Types are validated at compile time, this only affects rollup bundling
      */
-    inlineSourceMap: false,
+    check: false,
     /**
-     * Always include source content in sourcemaps for better debugging
+     * Exclude node_modules from processing to reduce memory footprint
+     * Prevents loading type declarations from dependencies like @aipyq/agents
      */
-    inlineSources: true,
+    exclude: ['node_modules/**'],
     /**
-     * Note: @rollup/plugin-typescript uses TypeScript's transpileModule API by default,
-     * which only performs syntax transformation and doesn't load type declarations.
-     * This helps reduce memory usage when processing large dependencies like @aipyq/agents.
-     * Type checking should be done separately via tsc --noEmit if needed.
+     * Use cache for faster incremental builds
      */
+    cacheRoot: './node_modules/.cache/rpt2_cache',
+    clean: true,
   }),
   json(),
 ];
