@@ -31,18 +31,11 @@ const App = () => {
     initializeFontSize();
   }, []);
 
-  // Load theme from environment variables if available
-  const envTheme = getThemeFromEnv();
-
   return (
     <QueryClientProvider client={queryClient}>
       <RecoilRoot>
         <LiveAnnouncer>
-          <ThemeProvider
-            // Only pass initialTheme and themeRGB if environment theme exists
-            // This allows localStorage values to persist when no env theme is set
-            {...(envTheme && { initialTheme: 'system', themeRGB: envTheme })}
-          >
+          <ThemeProvider initialTheme="dark" themeRGB={getThemeFromEnv() || undefined}>
             {/* The ThemeProvider will automatically:
                 1. Apply dark/light mode classes
                 2. Apply custom theme colors if envTheme is provided

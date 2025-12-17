@@ -64,7 +64,7 @@ const useNewConvo = (index = 0) => {
   });
 
   const switchToConversation = useRecoilCallback(
-    ({ snapshot }) =>
+    () =>
       async (
         conversation: TConversation,
         preset: Partial<TPreset> | null = null,
@@ -77,13 +77,7 @@ const useNewConvo = (index = 0) => {
       ) => {
         const modelsConfig = modelsData ?? modelsQuery.data;
         const { endpoint = null } = conversation;
-        // 获取最新的 startupConfig（通过闭包访问）
-        const currentStartupConfig = startupConfig;
-        // 如果 endpoint 为 null，或者明确要求 buildDefault，或者 endpoint 是配置的默认端点，都应该构建默认对话
-        // 这样可以确保配置的默认端点和模型被正确应用
-        const configDefaultEndpoint = currentStartupConfig?.interface?.defaultEndpoint;
-        const shouldBuildDefault = endpoint === null || buildDefault || endpoint === configDefaultEndpoint;
-        const buildDefaultConversation = shouldBuildDefault ?? false;
+        const buildDefaultConversation = (endpoint === null || buildDefault) ?? false;
         const activePreset =
           // use default preset only when it's defined,
           // preset is not provided,
@@ -106,7 +100,7 @@ const useNewConvo = (index = 0) => {
           let defaultEndpoint = getDefaultEndpoint({
             convoSetup: activePreset ?? conversation,
             endpointsConfig,
-            startupConfig: currentStartupConfig,
+            startupConfig,
           });
 
           if (!defaultEndpoint) {
@@ -161,7 +155,7 @@ const useNewConvo = (index = 0) => {
             lastConversationSetup: activePreset as TConversation,
             endpoint: defaultEndpoint,
             models,
-            startupConfig: currentStartupConfig,
+            startupConfig,
           });
         }
 
@@ -215,7 +209,7 @@ const useNewConvo = (index = 0) => {
           state: disableFocus ? {} : { focusChat: true },
         });
       },
-    [endpointsConfig, defaultPreset, assistantsListMap, modelsQuery.data, startupConfig],
+    [endpointsConfig, defaultPreset, assistantsListMap, modelsQuery.data],
   );
 
   const newConversation = useCallback(
@@ -252,27 +246,10 @@ const useNewConvo = (index = 0) => {
           ? { endpoint: _template.endpoint }
           : _template;
 
-      // 如果配置了 defaultEndpoint，优先使用配置的默认端点
-      const configDefaultEndpoint = startupConfig?.interface?.defaultEndpoint;
-      const configDefaultModel = startupConfig?.interface?.defaultModel;
-      
-      // 添加调试日志
-      console.log('[useNewConvo] Creating new conversation:', {
-        hasStartupConfig: !!startupConfig,
-        hasInterface: !!startupConfig?.interface,
-        configDefaultEndpoint,
-        configDefaultModel,
-        interfaceKeys: startupConfig?.interface ? Object.keys(startupConfig.interface) : [],
-        fullInterface: JSON.stringify(startupConfig?.interface, null, 2),
-      });
-      
-      // 确定初始 endpoint：优先使用 template 中的，然后是配置的默认端点
-      const initialEndpoint = template.endpoint ?? configDefaultEndpoint ?? null;
-      
       const conversation = {
         conversationId: Constants.NEW_CONVO as string,
         title: 'New Chat',
-        endpoint: initialEndpoint,
+        endpoint: null,
         ...template,
         createdAt: '',
         updatedAt: '',
@@ -281,8 +258,9 @@ const useNewConvo = (index = 0) => {
       let preset = _preset;
       // 如果配置了 defaultEndpoint，优先使用配置的默认端点，而不是 modelSpecs
       // 这样可以确保配置的 defaultEndpoint 和 defaultModel 生效
+      const hasConfigDefaultEndpoint = startupConfig?.interface?.defaultEndpoint;
       
-      if (!preset && !configDefaultEndpoint) {
+      if (!preset && !hasConfigDefaultEndpoint) {
         const result = getDefaultModelSpec(startupConfig);
         const defaultModelSpec = result?.default ?? result?.last;
         if (

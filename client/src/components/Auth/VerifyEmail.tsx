@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Spinner, ThemeSelector } from '@aipyq/client';
+import { Spinner } from '@aipyq/client';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useVerifyEmailMutation, useResendVerificationEmail } from '~/data-provider';
 import { useLocalize } from '~/hooks';
@@ -114,9 +114,6 @@ function RequestPasswordReset() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-white pt-6 dark:bg-gray-900 sm:pt-0">
-      <div className="absolute bottom-0 left-0 m-4">
-        <ThemeSelector />
-      </div>
       {verificationStatus ? <VerificationSuccess /> : <VerificationInProgress />}
     </div>
   );

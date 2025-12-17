@@ -600,6 +600,7 @@
   "com_sidepanel_manage_files": "管理文件",
   "com_sidepanel_mcp_no_servers_with_vars": "没有支持可配置变量的 MCP 服务器。",
   "com_sidepanel_parameters": "参数",
+  "com_sidepanel_thought_chain": "思维链",
   "com_sources_agent_file": "源文件",
   "com_sources_agent_files": "智能体文件",
   "com_sources_download_aria_label": "下载 {{filename}} {{status}}",

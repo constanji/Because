@@ -9,15 +9,31 @@ import EndpointsConfig from './EndpointsConfig';
 import UsersManagement from './UsersManagement';
 import FeaturesManagement from './FeaturesManagement';
 import MarketplaceContent from './MarketplaceContent';
+import AvailableToolsManagement from './AvailableToolsManagement';
 
 interface GlobalConfigContentProps {
   startupConfig?: TStartupConfig;
 }
 
-type TabType = 'modelSpecs' | 'agents' | 'mcp' | 'users' | 'features' | 'marketplace';
+type TabType =
+  | 'modelSpecs'
+  | 'agents'
+  | 'marketplace'
+  | 'mcp'
+  | 'availableTools'
+  | 'users'
+  | 'features';
 
 const isValidTab = (tab: string | null): tab is TabType => {
-  return tab === 'modelSpecs' || tab === 'agents' || tab === 'mcp' || tab === 'users' || tab === 'features' || tab === 'marketplace';
+  return (
+    tab === 'modelSpecs' ||
+    tab === 'agents' ||
+    tab === 'marketplace' ||
+    tab === 'mcp' ||
+    tab === 'availableTools' ||
+    tab === 'users' ||
+    tab === 'features'
+  );
 };
 
 export default function GlobalConfigContent({ startupConfig: propStartupConfig }: GlobalConfigContentProps) {
@@ -61,6 +77,11 @@ export default function GlobalConfigContent({ startupConfig: propStartupConfig }
       id: 'mcp',
       label: 'MCP管理',
       description: '查看和管理MCP服务器的连接状态',
+    },
+    {
+      id: 'availableTools',
+      label: '工具管理',
+      description: '查看当前端点下可用的所有工具',
     },
     {
       id: 'users',
@@ -119,6 +140,11 @@ export default function GlobalConfigContent({ startupConfig: propStartupConfig }
         {activeTab === 'mcp' && (
           <div className="h-full overflow-hidden px-4 py-4" key="mcp-management">
             <MCPManagement startupConfig={startupConfig} />
+          </div>
+        )}
+        {activeTab === 'availableTools' && (
+          <div className="h-full overflow-hidden px-4 py-4" key="available-tools-management">
+            <AvailableToolsManagement />
           </div>
         )}
         {activeTab === 'users' && (

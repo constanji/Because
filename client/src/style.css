@@ -1888,6 +1888,85 @@ html {
     visibility: hidden;
   }
 }
+
+/* 思考链组件主题适配 - 确保在 dark 和 light 主题下文字都清晰可见 */
+/* 使用最高优先级覆盖所有可能的样式 */
+.thought-chain-container,
+.thought-chain-container *,
+.thought-chain-container *::before,
+.thought-chain-container *::after {
+  color: var(--text-primary) !important;
+}
+
+/* 针对 ant-design-x ThoughtChain 组件的所有可能类名和结构 */
+.thought-chain-container [class*="thought-chain"],
+.thought-chain-container [class*="ThoughtChain"],
+.thought-chain-container [class*="thought-chain"] *,
+.thought-chain-container [class*="ThoughtChain"] *,
+.thought-chain-container [class*="ant-thought"],
+.thought-chain-container [class*="ant-thought"] *,
+.thought-chain-container [class*="ant-thought-chain"],
+.thought-chain-container [class*="ant-thought-chain"] * {
+  color: var(--text-primary) !important;
+}
+
+/* 标题样式 - 覆盖所有可能的标题元素 */
+.thought-chain-container [class*="title"],
+.thought-chain-container [class*="Title"],
+.thought-chain-container [class*="title"] *,
+.thought-chain-container [class*="Title"] *,
+.thought-chain-container div[role="button"] > span:first-child,
+.thought-chain-container button > span:first-child,
+.thought-chain-container [class*="item"] > span:first-child,
+.thought-chain-container [class*="item"] > div:first-child,
+.thought-chain-container button span:first-of-type,
+.thought-chain-container div[role="button"] span:first-of-type {
+  color: var(--text-primary) !important;
+}
+
+/* 描述样式 - 覆盖所有可能的描述元素 */
+.thought-chain-container [class*="description"],
+.thought-chain-container [class*="Description"],
+.thought-chain-container [class*="description"] *,
+.thought-chain-container [class*="Description"] *,
+.thought-chain-container div[role="button"] > span:last-child,
+.thought-chain-container button > span:last-child,
+.thought-chain-container [class*="item"] > span:last-child,
+.thought-chain-container [class*="item"] > div:last-child,
+.thought-chain-container button span:last-of-type,
+.thought-chain-container div[role="button"] span:last-of-type {
+  color: var(--text-secondary) !important;
+}
+
+/* 确保所有文字元素都使用主题颜色 */
+.thought-chain-container div,
+.thought-chain-container span,
+.thought-chain-container p,
+.thought-chain-container button,
+.thought-chain-container label,
+.thought-chain-container a {
+  color: var(--text-primary) !important;
+}
+
+/* 特殊处理：如果 ant-design-x 使用了特定的类名结构 */
+.thought-chain-container .ant-thought-chain-item-title,
+.thought-chain-container .ant-thought-chain-item-title *,
+.thought-chain-container [class*="ant-thought-chain-item-title"],
+.thought-chain-container [class*="ant-thought-chain-item-title"] * {
+  color: var(--text-primary) !important;
+}
+
+.thought-chain-container .ant-thought-chain-item-description,
+.thought-chain-container .ant-thought-chain-item-description *,
+.thought-chain-container [class*="ant-thought-chain-item-description"],
+.thought-chain-container [class*="ant-thought-chain-item-description"] * {
+  color: var(--text-secondary) !important;
+}
+
+/* 强制覆盖内联样式（如果存在） */
+.thought-chain-container [style*="color"] {
+  color: var(--text-primary) !important;
+}
 @keyframes blink {
   to {
     visibility: hidden;

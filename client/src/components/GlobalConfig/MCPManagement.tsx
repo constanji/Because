@@ -823,14 +823,20 @@ export default function MCPManagement({ startupConfig: propStartupConfig }: MCPM
             </p>
           </div>
         ) : (
-          <div className={cn(viewMode === 'compact' ? 'grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3' : 'space-y-2')}>
+          <div
+            className={cn(
+              viewMode === 'compact'
+                ? 'grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3'
+                : 'space-y-2',
+            )}
+          >
           {mcpServerDefinitions.map((server) => {
             const serverStatus = connectionStatus?.[server.serverName];
             const errorMessage = serverErrorMessages[server.serverName];
               // 如果有错误消息，显示为 error 状态
               const connectionState = errorMessage 
                 ? 'error' 
-                : (serverStatus?.connectionState ?? 'disconnected');
+                : serverStatus?.connectionState ?? 'disconnected';
             const isTesting = testingServers[server.serverName] || false;
             const requiresOAuth = serverStatus?.requiresOAuth || false;
 
@@ -843,8 +849,8 @@ export default function MCPManagement({ startupConfig: propStartupConfig }: MCPM
               >
                     <div className="flex items-center gap-2">
                       {getStatusIcon(connectionState)}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-semibold text-text-primary line-clamp-1">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="line-clamp-1 text-sm font-semibold text-text-primary">
                           {server.serverName}
                         </h4>
                         <p className="mt-1 text-xs text-text-secondary">
@@ -866,7 +872,10 @@ export default function MCPManagement({ startupConfig: propStartupConfig }: MCPM
                         aria-label="测试连接"
                       >
                         <RefreshCw
-                          className={cn('h-4 w-4', (isTesting || reinitializeMutation.isLoading) && 'animate-spin')}
+                          className={cn(
+                            'h-4 w-4',
+                            (isTesting || reinitializeMutation.isLoading) && 'animate-spin',
+                          )}
                         />
                       </button>
                       <button
@@ -952,7 +961,10 @@ export default function MCPManagement({ startupConfig: propStartupConfig }: MCPM
                     aria-label={`测试连接 ${server.serverName}`}
                   >
                     <RefreshCw
-                      className={cn('h-4 w-4', (isTesting || reinitializeMutation.isLoading) && 'animate-spin')}
+                        className={cn(
+                          'h-4 w-4',
+                          (isTesting || reinitializeMutation.isLoading) && 'animate-spin',
+                        )}
                     />
                     {isTesting || reinitializeMutation.isLoading ? '测试中...' : '测试连接'}
                   </Button>
