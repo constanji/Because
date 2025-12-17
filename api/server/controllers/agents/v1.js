@@ -21,6 +21,7 @@ const {
   removeNullishValues,
   CacheKeys,
   Time,
+  SystemRoles,
 } = require('@aipyq/data-provider');
 const {
   getListAgentsByAccess,
@@ -145,6 +146,26 @@ const createAgentHandler = async (req, res) => {
     } catch (permissionError) {
       logger.error(
         `[createAgent] Failed to grant owner permissions for agent ${agent.id}:`,
+        permissionError,
+      );
+    }
+
+    // Additionally grant EDIT permissions to all administrators via role-based ACL
+    try {
+      await grantPermission({
+        principalType: PrincipalType.ROLE,
+        principalId: SystemRoles.ADMIN,
+        resourceType: ResourceType.AGENT,
+        resourceId: agent._id,
+        accessRoleId: AccessRoleIds.AGENT_EDITOR,
+        grantedBy: userId,
+      });
+      logger.debug(
+        `[createAgent] Granted editor permissions to role ${SystemRoles.ADMIN} for agent ${agent.id}`,
+      );
+    } catch (permissionError) {
+      logger.error(
+        `[createAgent] Failed to grant editor permissions for agent ${agent.id}:`,
         permissionError,
       );
     }
@@ -442,6 +463,26 @@ const duplicateAgentHandler = async (req, res) => {
     } catch (permissionError) {
       logger.error(
         `[duplicateAgent] Failed to grant owner permissions for duplicated agent ${newAgent.id}:`,
+        permissionError,
+      );
+    }
+
+    // Additionally grant EDIT permissions to all administrators via role-based ACL
+    try {
+      await grantPermission({
+        principalType: PrincipalType.ROLE,
+        principalId: SystemRoles.ADMIN,
+        resourceType: ResourceType.AGENT,
+        resourceId: newAgent._id,
+        accessRoleId: AccessRoleIds.AGENT_EDITOR,
+        grantedBy: userId,
+      });
+      logger.debug(
+        `[duplicateAgent] Granted editor permissions to role ${SystemRoles.ADMIN} for duplicated agent ${newAgent.id}`,
+      );
+    } catch (permissionError) {
+      logger.error(
+        `[duplicateAgent] Failed to grant editor permissions for duplicated agent ${newAgent.id}:`,
         permissionError,
       );
     }
