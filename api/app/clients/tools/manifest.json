@@ -72,19 +72,6 @@
     ]
   },
   {
-    "name": "Browser",
-    "pluginKey": "web-browser",
-    "description": "抓取和总结网页数据",
-    "icon": "assets/web-browser.svg",
-    "authConfig": [
-      {
-        "authField": "OPENAI_API_KEY",
-        "label": "OpenAI API Key",
-        "description": "Browser 使用 OpenAI 嵌入。"
-      }
-    ]
-  },
-  {
     "name": "DALL-E-3",
     "pluginKey": "dalle",
     "description": "[DALL-E-3] 从自然语言描述创建真实图像和艺术。",
@@ -179,27 +166,6 @@
         "description": "Provide your Flux API key from your user profile."
       }
     ]
-  },
-  {
-    "name": "BeCause",
-    "pluginKey": "because",
-    "description": "智能问数模板工具，读取 .because 命令模板、提示词模板、指南与变量文档，辅助 /because.* 指令生成。",
-    "icon": "https://raw.githubusercontent.com/constanji/aipyq-assets/main/icons/because.png",
-    "authConfig": []
-  },
-  {
-    "name": "SQL Executor",
-    "pluginKey": "sql_executor",
-    "description": "执行 SQL 查询并返回结果和归因分析。调用数据库接口执行 SQL，分析查询结果，并提供详细的归因解释。",
-    "icon": "https://raw.githubusercontent.com/constanji/aipyq-assets/main/icons/sql.png",
-    "authConfig": []
-  },
-  {
-    "name": "Database Schema",
-    "pluginKey": "database_schema",
-    "description": "获取数据库表结构信息。可以获取所有表的Schema，或指定单个表的详细结构。返回的信息包括表名、列名、数据类型、是否可空、主键、索引等，用于生成准确的SQL查询。",
-    "icon": "https://raw.githubusercontent.com/constanji/aipyq-assets/main/icons/database.png",
-    "authConfig": []
   },
   {
     "name": "Speckit",
