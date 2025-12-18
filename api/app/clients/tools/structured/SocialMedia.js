@@ -33,8 +33,15 @@ class SocialMedia extends Tool {
 
   constructor(fields = {}) {
     super();
-    this.projectRoot = fields.projectRoot || process.cwd();
+    // 优先使用明确传入的 projectRoot，否则使用环境变量，最后回退到从 __dirname 计算
+    // 这样确保在容器环境中能正确找到项目根目录
+    this.projectRoot = fields.projectRoot 
+      || process.env.PROJECT_ROOT 
+      || path.resolve(__dirname, '../../../../');
     this.templatesDir = path.join(this.projectRoot, 'specs', 'social-media-templates');
+    
+    logger.debug(`[SocialMedia] projectRoot = ${this.projectRoot}`);
+    logger.debug(`[SocialMedia] templatesDir = ${this.templatesDir}`);
   }
 
   /**
@@ -71,13 +78,18 @@ class SocialMedia extends Tool {
    * Load a template file
    */
   async loadTemplate(templatePath) {
-    const repoRoot = await this.findRepoRoot();
-    const fullPath = path.join(repoRoot, templatePath);
+    // 直接使用 projectRoot，不再依赖 findRepoRoot()
+    // templatePath 已经是相对于项目根目录的路径，如：specs/social-media-templates/...
+    const fullPath = path.join(this.projectRoot, templatePath);
 
     try {
       return await fs.readFile(fullPath, 'utf-8');
     } catch (err) {
-      throw new Error(`Template not found: ${fullPath}`);
+      logger.error(`[SocialMedia] 加载模板失败 - 完整路径: ${fullPath}`);
+      logger.error(`[SocialMedia] projectRoot: ${this.projectRoot}`);
+      logger.error(`[SocialMedia] templatePath: ${templatePath}`);
+      logger.error(`[SocialMedia] 错误: ${err.message}`);
+      throw new Error(`无法加载模板: ${templatePath} (完整路径: ${fullPath}, 错误: ${err.message})`);
     }
   }
 
@@ -85,13 +97,14 @@ class SocialMedia extends Tool {
    * Load command template
    */
   async loadCommandTemplate() {
-    const repoRoot = await this.findRepoRoot();
-    const templatePath = path.join(repoRoot, 'specs', 'social-media-templates', 'commands', 'generate-social-post.md');
+    // 直接使用 projectRoot，不再依赖 findRepoRoot()
+    const templatePath = path.join(this.projectRoot, 'specs', 'social-media-templates', 'commands', 'generate-social-post.md');
 
     try {
       return await fs.readFile(templatePath, 'utf-8');
     } catch (err) {
-      throw new Error(`Command template not found: ${templatePath}`);
+      logger.error(`[SocialMedia] 加载命令模板失败: ${templatePath}`);
+      throw new Error(`命令模板不存在: ${templatePath} (错误: ${err.message})`);
     }
   }
 
@@ -151,8 +164,8 @@ class SocialMedia extends Tool {
    * Load format guides
    */
   async loadFormatGuides() {
-    const repoRoot = await this.findRepoRoot();
-    const guidesDir = path.join(repoRoot, 'specs', 'social-media-templates', 'templates', 'format-guides');
+    // 直接使用 projectRoot，不再依赖 findRepoRoot()
+    const guidesDir = path.join(this.projectRoot, 'specs', 'social-media-templates', 'templates', 'format-guides');
 
     try {
       const [textFormatting, imageGuidelines, hashtagRules] = await Promise.all([
@@ -251,8 +264,8 @@ class SocialMedia extends Tool {
    */
   async handleTemplates(args) {
     try {
-      const repoRoot = await this.findRepoRoot();
-      const templatesDir = path.join(repoRoot, 'specs', 'social-media-templates', 'templates');
+      // 直接使用 projectRoot，不再依赖 findRepoRoot()
+      const templatesDir = path.join(this.projectRoot, 'specs', 'social-media-templates', 'templates');
 
       const templates = {
         general: {

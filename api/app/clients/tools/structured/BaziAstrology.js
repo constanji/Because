@@ -35,8 +35,15 @@ class BaziAstrology extends Tool {
 
   constructor(fields = {}) {
     super();
-    this.projectRoot = fields.projectRoot || process.cwd();
+    // 优先使用明确传入的 projectRoot，否则使用环境变量，最后回退到从 __dirname 计算
+    // 这样确保在容器环境中能正确找到项目根目录
+    this.projectRoot = fields.projectRoot 
+      || process.env.PROJECT_ROOT 
+      || path.resolve(__dirname, '../../../../');
     this.templatesDir = path.join(this.projectRoot, 'specs', 'bazi-astrology-templates');
+    
+    logger.debug(`[BaziAstrology] projectRoot = ${this.projectRoot}`);
+    logger.debug(`[BaziAstrology] templatesDir = ${this.templatesDir}`);
   }
 
   /**
@@ -73,13 +80,18 @@ class BaziAstrology extends Tool {
    * Load a template file
    */
   async loadTemplate(templatePath) {
-    const repoRoot = await this.findRepoRoot();
-    const fullPath = path.join(repoRoot, templatePath);
+    // 直接使用 projectRoot，不再依赖 findRepoRoot()
+    // templatePath 已经是相对于项目根目录的路径，如：specs/bazi-astrology-templates/...
+    const fullPath = path.join(this.projectRoot, templatePath);
 
     try {
       return await fs.readFile(fullPath, 'utf-8');
     } catch (err) {
-      throw new Error(`Template not found: ${fullPath}`);
+      logger.error(`[BaziAstrology] 加载模板失败 - 完整路径: ${fullPath}`);
+      logger.error(`[BaziAstrology] projectRoot: ${this.projectRoot}`);
+      logger.error(`[BaziAstrology] templatePath: ${templatePath}`);
+      logger.error(`[BaziAstrology] 错误: ${err.message}`);
+      throw new Error(`无法加载模板: ${templatePath} (完整路径: ${fullPath}, 错误: ${err.message})`);
     }
   }
 
@@ -87,7 +99,7 @@ class BaziAstrology extends Tool {
    * Load command template
    */
   async loadCommandTemplate(commandType) {
-    const repoRoot = await this.findRepoRoot();
+    // 直接使用 projectRoot，不再依赖 findRepoRoot()
     const commandTemplates = {
       bazi_generate: 'specs/bazi-astrology-templates/templates/commands/bazi-generate-command.md',
       bazi_analyze: 'specs/bazi-astrology-templates/templates/commands/bazi-analyze-command.md',
@@ -99,11 +111,11 @@ class BaziAstrology extends Tool {
       return null;
     }
 
-    const fullPath = path.join(repoRoot, templatePath);
+    const fullPath = path.join(this.projectRoot, templatePath);
     try {
       return await fs.readFile(fullPath, 'utf-8');
     } catch (err) {
-      logger.warn(`Command template not found: ${fullPath}`);
+      logger.warn(`[BaziAstrology] 命令模板不存在: ${fullPath}`);
       return null;
     }
   }

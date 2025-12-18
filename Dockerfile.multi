@@ -119,7 +119,10 @@ COPY --from=data-provider-build /app/packages/data-provider/dist ./packages/data
 COPY --from=data-schemas-build /app/packages/data-schemas/dist ./packages/data-schemas/dist
 COPY --from=api-package-build /app/packages/api/dist ./packages/api/dist
 COPY --from=client-build /app/client/dist ./client/dist
-WORKDIR /app/api
+# 确保 specs 目录有正确的权限（可读）
+RUN chmod -R 755 /app/specs && find /app/specs -type f -exec chmod 644 {} \;
+# 保持 WORKDIR 在 /app，这样 process.cwd() = /app，相对路径 specs/... 会正确解析到 /app/specs/...
+WORKDIR /app
 EXPOSE 3080
 ENV HOST=0.0.0.0
-CMD ["node", "server/index.js"]
+CMD ["node", "api/server/index.js"]

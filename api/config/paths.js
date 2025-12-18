@@ -1,14 +1,22 @@
 const path = require('path');
 
+// 计算项目根目录
+// 文件位置：api/config/paths.js
+// 从 api/config 向上两级到项目根目录
+// 在容器中：/app/api/config -> /app/api -> /app (项目根目录)
+// 在本地：./api/config -> ./api -> . (项目根目录，解析为绝对路径)
+const projectRoot = path.resolve(__dirname, '..', '..');
+
 module.exports = {
-  root: path.resolve(__dirname, '..', '..'),
-  uploads: path.resolve(__dirname, '..', '..', 'uploads'),
-  clientPath: path.resolve(__dirname, '..', '..', 'client'),
-  dist: path.resolve(__dirname, '..', '..', 'client', 'dist'),
-  publicPath: path.resolve(__dirname, '..', '..', 'client', 'public'),
-  fonts: path.resolve(__dirname, '..', '..', 'client', 'public', 'fonts'),
-  assets: path.resolve(__dirname, '..', '..', 'client', 'public', 'assets'),
-  imageOutput: path.resolve(__dirname, '..', '..', 'client', 'public', 'images'),
-  structuredTools: path.resolve(__dirname, '..', 'app', 'clients', 'tools', 'structured'),
-  pluginManifest: path.resolve(__dirname, '..', 'app', 'clients', 'tools', 'manifest.json'),
+  root: projectRoot,
+  uploads: path.join(projectRoot, 'uploads'),
+  clientPath: path.join(projectRoot, 'client'),
+  dist: path.join(projectRoot, 'client', 'dist'),
+  publicPath: path.join(projectRoot, 'client', 'public'),
+  fonts: path.join(projectRoot, 'client', 'public', 'fonts'),
+  assets: path.join(projectRoot, 'client', 'public', 'assets'),
+  imageOutput: path.join(projectRoot, 'client', 'public', 'images'),
+  // structuredTools 从项目根目录开始，加上 api 目录
+  structuredTools: path.join(projectRoot, 'api', 'app', 'clients', 'tools', 'structured'),
+  pluginManifest: path.join(projectRoot, 'api', 'app', 'clients', 'tools', 'manifest.json'),
 };

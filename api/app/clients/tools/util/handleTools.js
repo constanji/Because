@@ -47,6 +47,7 @@ const { createMCPTool, createMCPTools } = require('~/server/services/MCP');
 const { loadAuthValues } = require('~/server/services/Tools/credentials');
 const { getMCPServerTools } = require('~/server/services/Config');
 const { getRoleByName } = require('~/models/Role');
+const paths = require('~/config/paths');
 
 /**
  * Validates the availability and authentication of tools for a user based on environment variables or user-specific plugin authentication values.
@@ -248,6 +249,16 @@ const loadTools = async ({
     flux: imageGenOptions,
     dalle: imageGenOptions,
     'stable-diffusion': imageGenOptions,
+    // 为需要访问模板文件的工具传递正确的项目根目录
+    bazi_astrology: {
+      projectRoot: paths.root,
+    },
+    social: {
+      projectRoot: paths.root,
+    },
+    speckit: {
+      projectRoot: paths.root,
+    },
   };
 
   /** @type {Record<string, string>} */

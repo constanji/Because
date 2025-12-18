@@ -29,6 +29,7 @@ services:
       - type: bind
         source: ./.env
         target: /app/.env
+      - ./specs:/app/specs
       - ./images:/app/client/public/images
       - ./uploads:/app/uploads
       - ./logs:/app/api/logs
