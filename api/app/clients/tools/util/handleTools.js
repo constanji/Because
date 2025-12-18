@@ -39,6 +39,8 @@ const {
   SocialMedia,
   BaziAstrology,
   DatabaseSchema,
+  SqlExecutor,
+  BeCause,
 } = require('../');
 const { primeFiles: primeCodeFiles } = require('~/server/services/Files/Code/process');
 const { createFileSearchTool, primeFiles: primeSearchFiles } = require('./fileSearch');
@@ -185,9 +187,11 @@ const loadTools = async ({
     traversaal_search: TraversaalSearch,
     tavily_search_results_json: TavilySearchResults,
     speckit: Speckit,
+    because: BeCause,
     database_schema: DatabaseSchema,
     social: SocialMedia,
     bazi_astrology: BaziAstrology,
+    sql_executor: SqlExecutor,
   };
 
   const customConstructors = {

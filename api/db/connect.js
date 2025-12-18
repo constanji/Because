@@ -62,10 +62,15 @@ async function connectDb() {
       // useFindAndModify: true,
       // useCreateIndex: true
     };
+    // 隐藏密码后记录连接 URI（用于调试）
+    const safeUri = MONGO_URI.replace(/(:\/\/[^:]+:)([^@]+)(@)/, '$1****$3');
+    logger.info(`Connecting to MongoDB: ${safeUri}`);
     logger.info('Mongo Connection options');
     logger.info(JSON.stringify(opts, null, 2));
     mongoose.set('strictQuery', true);
     cached.promise = mongoose.connect(MONGO_URI, opts).then((mongoose) => {
+      const dbName = mongoose.connection.db?.databaseName || 'unknown';
+      logger.info(`Successfully connected to MongoDB database: ${dbName}`);
       return mongoose;
     });
   }

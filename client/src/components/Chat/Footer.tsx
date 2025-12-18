@@ -116,7 +116,7 @@ export default function Footer({ className }: { className?: string }) {
     const mainContentParts = (
       typeof config?.customFooter === 'string'
         ? config.customFooter
-        : 'AI 每日朋友圈  \n[浙ICP备2021031999号-3](https://beian.miit.gov.cn/)  Copyright © 2025-2026 Powered By [aipyq.com](https://www.aipyq.com)'
+        : '因为智能  \n[浙ICP备2021031999号-3](https://beian.miit.gov.cn/)  Copyright © 2025-2026 Powered By [because.ai](https://www.aipyq.com)'
     ).split('|');
 
     const parts = mainContentParts.map((part) => part.trim()).filter(Boolean);

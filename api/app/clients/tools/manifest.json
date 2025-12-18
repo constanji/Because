@@ -187,5 +187,19 @@
     "description": "生辰八字/星座分析工具，根据用户输入使用模板系统生成规范的八字命盘、命理分析和星座分析报告。Commands: generate (生成八字命盘或星座分析报告), analyze (进行八字分析或运势预测), templates (列出可用模板).",
     "icon": "🔮",
     "authConfig": []
+  },
+  {
+    "name": "BeCause",
+    "pluginKey": "because",
+    "description": "智能问数（自然语言转SQL）提示词模板系统。Commands: sql-generation (生成SQL), sql-generation-reasoning (生成推理计划), intent-classification (意图分类), data-assistance (数据辅助), misleading-assistance (误导查询处理), scoring (文档评分), hypothetical-questions (假设问题生成), agentic/main-agent (Agentic主代理), agentic/text-to-sql (Agentic文本转SQL), agentic/data-assistance (Agentic数据辅助), agentic/misleading-assistance (Agentic误导查询处理).",
+    "icon": "🔍",
+    "authConfig": []
+  },
+  {
+    "name": "SQL Executor",
+    "pluginKey": "sql_executor",
+    "description": "执行只读的 SQL SELECT 查询并返回结果和归因分析。调用内部 hsp-sql-api 服务的 /sql_query 接口执行查询，返回数据行、行数统计以及结构化的归因说明，帮助智能体在回答时清晰说明结论来自哪张表、哪些字段、哪些过滤条件。",
+    "icon": "💾",
+    "authConfig": []
   }
 ]

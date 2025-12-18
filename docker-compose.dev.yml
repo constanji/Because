@@ -2,7 +2,7 @@
 # 支持热重载，修改代码后自动刷新，无需重新构建镜像
 # 使用方法: docker-compose -f docker-compose.dev.yml up
 
-name: aipyq-dev
+name: because-dev
 
 services:
   # 后端开发服务
@@ -10,14 +10,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: Aipyq-Backend-Dev
+    container_name: Because-Backend-Dev
     ports:
-      - "${API_PORT:-3080}:3080"
+      - "${API_PORT:-1145}:3080"
     depends_on:
       - mongodb
       - meilisearch
     networks:
-      - aipyq-dev-network
+      - because-dev-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
@@ -26,12 +26,12 @@ services:
       - HOST=0.0.0.0
       - PORT=3080
       - NODE_ENV=development
-      - MONGO_URI=mongodb://mongodb:27017/Aipyq  # 容器内部使用 27017，外部映射到 27018
+      - MONGO_URI=mongodb://mongodb:27017/BecauseAi  # 容器内部使用 27017，外部映射到 27034
       - MEILI_HOST=http://meilisearch:7700
       - AIPYQ_LOG_DIR=/app/api/logs
       - CONFIG_PATH=/app/Aipyq.yaml
-      - DOMAIN_CLIENT=http://localhost:3090
-      - DOMAIN_SERVER=http://localhost:3080
+      - DOMAIN_CLIENT=http://localhost:4514
+      - DOMAIN_SERVER=http://localhost:1145
       - ENDPOINTS=agents  # 只启用 agents 标准端点，自定义端点（deepseek、modelscope）会自动加载
     volumes:
       # 挂载源代码以实现热重载
@@ -58,13 +58,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: Aipyq-Frontend-Dev
+    container_name: Because-Frontend-Dev
     ports:
-      - "3090:3090"
+      - "4514:3090"
     depends_on:
       - backend-dev
     networks:
-      - aipyq-dev-network
+      - because-dev-network
     env_file:
       - .env
     environment:
@@ -72,7 +72,8 @@ services:
       - HOST=0.0.0.0
       - PORT=3090
       - BACKEND_PORT=3080
-      - VITE_API_BASE_URL=http://localhost:3080
+      - BACKEND_HOST=backend-dev
+      - VITE_API_BASE_URL=http://backend-dev:3080
     volumes:
       # 挂载源代码以实现热重载
       - .:/app:cached
@@ -94,9 +95,9 @@ services:
     image: mongo
     restart: unless-stopped
     networks:
-      - aipyq-dev-network
+      - because-dev-network
     ports:
-      - "27018:27017"
+      - "27034:27017"
     volumes:
       - ./data-node:/data/db
     command: mongod --noauth
@@ -107,9 +108,9 @@ services:
     image: getmeili/meilisearch:v1.12.3
     restart: unless-stopped
     networks:
-      - aipyq-dev-network
+      - because-dev-network
     ports:
-      - "${MEILI_PORT:-7700}:7700"
+      - "${MEILI_PORT:-8701}:7700"
     env_file:
       - .env
     environment:
@@ -128,27 +129,27 @@ services:
   #     POSTGRES_PASSWORD: mypassword
   #   restart: unless-stopped
   #   networks:
-  #     - aipyq-dev-network
+  #     - because-dev-network
   #   volumes:
   #     - pgdata2-dev:/var/lib/postgresql/data
 
   # 可选的 RAG API (如果需要 RAG 功能)
   # rag_api:
   #   container_name: Rag_api-dev
-  #   image: ghcr.io/constanji/aipyq-rag-api-dev-lite:latest
+  #   image: ghcr.io/constanji/because-rag-api-dev-lite:latest
   #   environment:
   #     - DB_HOST=vectordb
-  #     - RAG_PORT=${RAG_PORT:-8000}
+  #     - RAG_PORT=${RAG_PORT:-9001}
   #   restart: unless-stopped
   #   networks:
-  #     - aipyq-dev-network
+  #     - because-dev-network
   #   depends_on:
   #     - vectordb
   #   env_file:
   #     - .env
 
 networks:
-  aipyq-dev-network:
+  because-dev-network:
     driver: bridge
 
 volumes:

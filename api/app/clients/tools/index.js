@@ -16,6 +16,8 @@ const Speckit = require('./structured/Speckit');
 const SocialMedia = require('./structured/SocialMedia');
 const BaziAstrology = require('./structured/BaziAstrology');
 const DatabaseSchema = require('./structured/DatabaseSchema');
+const SqlExecutor = require('./structured/SqlExecutor');
+const BeCause = require('./structured/BeCause');
 
 module.exports = {
   ...manifest,
@@ -35,4 +37,6 @@ module.exports = {
   SocialMedia,
   BaziAstrology,
   DatabaseSchema,
+  SqlExecutor,
+  BeCause,
 };

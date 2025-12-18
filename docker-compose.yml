@@ -1,14 +1,14 @@
 #不要直接编辑这个文件。可以编辑 'docker-compose.override.yaml' 文件。
 #参考 `docker-compose.override.yaml.example' 文件获取一些示例配置。
-name: aipyq
+name: because
 services:
   api:
-    container_name: Aipyq
+    container_name: Because
     ports:
-      - "${API_PORT:-3080}:3080"
-    depends_on:
-      - rag_api
-    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_REGISTRY_USER:-constanjin}/${IMAGE_PREFIX:-aipyq}:${IMAGE_TAG:-latest}
+      - "${API_PORT:-4080}:3080"
+    # depends_on:
+    #   - rag_api
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_REGISTRY_USER:-constanjin}/${IMAGE_PREFIX:-because}:${IMAGE_TAG:-latest}
     restart: always
     user: "${UID:-1000}:${GID:-1000}"
     extra_hosts:
@@ -16,12 +16,12 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=3080
-      - DOMAIN_CLIENT=http://localhost:${API_PORT:-3080}
-      - DOMAIN_SERVER=http://localhost:${API_PORT:-3080}
-      - MONGO_URI=mongodb://host.docker.internal:${MONGO_PORT:-27017}/Aipyq
+      - DOMAIN_CLIENT=http://localhost:${API_PORT:-4080}
+      - DOMAIN_SERVER=http://localhost:${API_PORT:-4080}
+      - MONGO_URI=mongodb://host.docker.internal:${MONGO_PORT:-27033}/BecauseAi
       - MEILI_HOST=http://meilisearch:7700
-      - RAG_PORT=${RAG_PORT:-8000}
-      - RAG_API_URL=http://rag_api:${RAG_PORT:-8000}
+      - RAG_PORT=${RAG_PORT:-9000}
+      - RAG_API_URL=http://rag_api:${RAG_PORT:-9000}
       - AIPYQ_LOG_DIR=/app/api/logs
       - CONFIG_PATH=/app/Aipyq.yaml
 
@@ -40,22 +40,22 @@ services:
       #- ./client/public/assets:/app/client/public/assets
       #- ./client/public/fonts:/app/client/public/fonts
   mongodb:
-    container_name: PYQ-MongoDB
+    container_name: Because-MongoDB
     image: mongo
     restart: always
     user: "${UID:-1000}:${GID:-1000}"
     ports:
-    - "${MONGO_PORT:-27017}:27017" 
+    - "${MONGO_PORT:-27033}:27017" 
     volumes:
       - ./data-node:/data/db
     command: mongod --noauth
   meilisearch:
-    container_name: PYQ-Meilisearch
+    container_name: Because-Meilisearch
     image: getmeili/meilisearch:v1.12.3
     restart: always
     user: "${UID:-1000}:${GID:-1000}"
     ports:
-      - "${MEILI_PORT:-7700}:7700"
+      - "${MEILI_PORT:-8700}:7700"
     environment:
       - MEILI_HOST=http://meilisearch:7700
       - MEILI_NO_ANALYTICS=true
@@ -63,7 +63,7 @@ services:
     volumes:
       - ./meili_data_v1.12:/meili_data
   vectordb:
-    container_name: vectorDB
+    container_name: Because-VectorDB
     image: pgvector/pgvector:0.8.0-pg15-trixie
     environment:
       POSTGRES_DB: mydatabase
@@ -72,17 +72,17 @@ services:
     restart: always
     volumes:
       - pgdata2:/var/lib/postgresql/data
-  rag_api:
-    container_name: Rag_api
-    image: ghcr.io/constanji/aipyq-rag-api-dev-lite:latest
-    environment:
-      - DB_HOST=vectordb
-      - RAG_PORT=${RAG_PORT:-8000}
-    restart: always
-    depends_on:
-      - vectordb
-    env_file:
-      - .env
+  # rag_api:
+  #   container_name: Because_Rag_api
+  #   image: ghcr.io/constanji/because-rag-api-dev-lite:latest
+  #   environment:
+  #     - DB_HOST=vectordb
+  #     - RAG_PORT=${RAG_PORT:-9000}
+  #   restart: always
+  #   depends_on:
+  #     - vectordb
+  #   env_file:
+  #     - .env
 
 volumes:
   pgdata2:

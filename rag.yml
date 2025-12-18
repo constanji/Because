@@ -10,10 +10,10 @@ services:
     volumes:
       - pgdata2:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5434:5432"
 
   rag_api:
-    image: ghcr.io/constanji/Aipyq-rag-api-dev:latest
+    image: ghcr.io/constanji/because-rag-api-dev:latest
     environment:
       - DB_HOST=vectordb
       - DB_PORT=5432
@@ -21,7 +21,7 @@ services:
       - POSTGRES_USER=myuser
       - POSTGRES_PASSWORD=mypassword
     ports:
-      - "${RAG_PORT}:${RAG_PORT}"
+      - "${RAG_PORT:-9002}:8000"
     depends_on:
       - vectordb
     env_file:
