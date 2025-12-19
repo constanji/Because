@@ -6,7 +6,8 @@ meili_data*
 data/
 logs
 *.log
-
+specs/
+docs/
 # Runtime data
 pids
 *.pid
