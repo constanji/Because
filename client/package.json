@@ -1,5 +1,5 @@
 {
-  "name": "@because/frontend",
+  "name": "@aipyq/frontend",
   "version": "v0.8.1-rc2",
   "description": "",
   "type": "module",
@@ -19,25 +19,25 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/constanji/Because.git"
+    "url": "git+https://github.com/constanji/Aipyqchat.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/constanji/Because/issues"
+    "url": "https://github.com/constanji/Aipyqchat/issues"
   },
-  "homepage": "https://github.com/constanji/Because",
+  "homepage": "https://www.aipyq.com",
   "dependencies": {
-    "@ant-design/icons": "^5.5.1",
-    "@ant-design/x": "^1.0.0",
+    "@ant-design/icons": "^6.1.0",
+    "@ant-design/x": "^2.1.1",
     "@ariakit/react": "^0.4.15",
     "@ariakit/react-core": "^0.4.17",
     "@codesandbox/sandpack-react": "^2.19.10",
     "@dicebear/collection": "^9.2.2",
     "@dicebear/core": "^9.2.2",
     "@headlessui/react": "^2.1.2",
-    "@because/client": "*",
+    "@aipyq/client": "*",
     "@marsidev/react-turnstile": "^1.1.0",
     "@mcp-ui/client": "^5.7.0",
     "@radix-ui/react-accordion": "^1.1.2",
@@ -61,7 +61,7 @@
     "@react-spring/web": "^9.7.5",
     "@tanstack/react-query": "^4.28.0",
     "@tanstack/react-table": "^8.11.7",
-    "antd": "^5.28.0",
+    "antd": "^6.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "copy-to-clipboard": "^3.3.3",
@@ -78,7 +78,7 @@
     "input-otp": "^1.4.2",
     "jotai": "^2.12.5",
     "js-cookie": "^3.0.5",
-    "@because/data-provider": "*",
+    "@aipyq/data-provider": "*",
     "lodash": "^4.17.21",
     "lucide-react": "^0.394.0",
     "match-sorter": "^8.1.0",

@@ -1890,7 +1890,8 @@ html {
 }
 
 /* 思考链组件主题适配 - 确保在 dark 和 light 主题下文字都清晰可见 */
-/* 使用最高优先级覆盖所有可能的样式 */
+/* 注意：ThoughtChainPanel 组件内部通过内联样式设置了 var(--text-tertiary) 作为基础颜色 */
+/* 这里保留基础样式作为后备，但内联样式会优先生效 */
 .thought-chain-container,
 .thought-chain-container *,
 .thought-chain-container *::before,
@@ -1963,10 +1964,8 @@ html {
   color: var(--text-secondary) !important;
 }
 
-/* 强制覆盖内联样式（如果存在） */
-.thought-chain-container [style*="color"] {
-  color: var(--text-primary) !important;
-}
+/* 注意：移除了对内联样式的强制覆盖，让 ThoughtChainPanel 组件内部的内联样式能够正确生效 */
+/* 内联样式使用 var(--text-tertiary) 作为基础颜色，提供更柔和的视觉效果 */
 @keyframes blink {
   to {
     visibility: hidden;

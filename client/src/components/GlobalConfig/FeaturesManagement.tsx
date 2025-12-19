@@ -373,7 +373,7 @@ export default function FeaturesManagement({ startupConfig: propStartupConfig }:
                 type="text"
                 value={config.customWelcome ?? ''}
                 onChange={(e) => updateConfig('customWelcome', e.target.value)}
-                placeholder="欢迎来到每日AI朋友圈！祝您体验愉快。"
+                placeholder="欢迎来到BeCause.Ai"
                 className="w-full rounded-md border border-border-light bg-surface-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary focus:outline-none"
               />
               <ConfigModelSelector
