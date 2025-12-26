@@ -39,25 +39,17 @@ const datDatasourceSchema = new mongoose.Schema(
 // Compound index for unique name per project (mirrors Java: @CompoundIndex)
 datDatasourceSchema.index({ projectId: 1, name: 1 }, { unique: true });
 
-let DatDatasource;
-
-try {
-  const conn = getDatConnection();
-  DatDatasource = conn.model("DatDatasource", datDatasourceSchema);
-} catch (error) {
-  // If connection isn't ready immediately, we might need a function to get model or handle it differently.
-  // However, getDatConnection returns a connection instance (or a promise-like object that mongoose can use?
-  // Wait, getDatConnection in datConnect.js returns `state.connection` which might be null if not connected.
-  // Actually, looking at datConnect.js from previous steps, it returns a Promise if awaited, or checks state.
-  // The previous DatProject implementation used `await getDatConnection()` inside the controller or initialized it.
-  // Let's check DatProject.js to copy the pattern.
-  console.error("Error defining DatDatasource model:", error);
-}
-
 module.exports = {
+  /**
+   * Get the DatDatasource model (async - connection must be awaited)
+   * @returns {Promise<mongoose.Model>}
+   */
   getDatDatasourceModel: async () => {
     const conn = await getDatConnection();
-    // Check if model already exists on connection
+    if (!conn) {
+      throw new Error("DAT MongoDB connection not available");
+    }
+    // Check if model already exists on connection to avoid OverwriteModelError
     if (conn.models.DatDatasource) {
       return conn.models.DatDatasource;
     }
