@@ -23,9 +23,11 @@ const {
 const { getMCPManager, getFlowStateManager, getOAuthReconnectionManager } = require('~/config');
 const { findToken, createToken, updateToken } = require('~/models');
 const { reinitMCPServer } = require('./Tools/mcp');
+const { getDataSourceByAgentId } = require('./DataSource');
 const { getAppConfig } = require('./Config');
 const { getLogStores } = require('~/cache');
 const { mcpServersRegistry } = require('@because/api');
+
 
 /**
  * @param {object} params
@@ -360,11 +362,43 @@ function createToolInstance({ res, toolName, serverName, toolDefinition, provide
       const customUserVars =
         config?.configurable?.userMCPAuthMap?.[`${Constants.mcp_prefix}${serverName}`];
 
+      // Inject projectId (arg1) and datasourceId (arg2) for dat-server MCP
+      let finalToolArguments = toolArguments;
+      if (serverName === 'dat-server') {
+        const agentId = config?.configurable?.last_agent_id;
+        logger.info(`[MCP][dat-server] Processing tool call for agent: ${agentId}`);
+
+        if (agentId) {
+          try {
+            const dataSource = await getDataSourceByAgentId(agentId);
+            if (dataSource && dataSource._id && dataSource.projectId) {
+              finalToolArguments = {
+                ...toolArguments,
+                arg1: dataSource.projectId,  // Project ID
+                arg2: dataSource._id,         // Datasource ID
+              };
+              logger.info(
+                `[MCP][dat-server] Injected: projectId(arg1)=${dataSource.projectId}, datasourceId(arg2)=${dataSource._id}`,
+              );
+            } else {
+              logger.warn(`[MCP][dat-server] Agent ${agentId} has no bound datasource or missing projectId`);
+            }
+          } catch (error) {
+            logger.error(`[MCP][dat-server] Error looking up datasource for agent ${agentId}:`, error);
+          }
+        } else {
+          logger.warn(`[MCP][dat-server] No agentId available in config.configurable.last_agent_id`);
+        }
+      }
+
+
+
       const result = await mcpManager.callTool({
         serverName,
         toolName,
         provider,
-        toolArguments,
+        toolArguments: finalToolArguments,
+
         options: {
           signal: derivedSignal,
         },

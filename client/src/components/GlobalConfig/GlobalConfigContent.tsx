@@ -10,6 +10,9 @@ import UsersManagement from './UsersManagement';
 import FeaturesManagement from './FeaturesManagement';
 import MarketplaceContent from './MarketplaceContent';
 import AvailableToolsManagement from './AvailableToolsManagement';
+import ProjectsManagement from './ProjectsManagement';
+import DatasourceManagement from './DatasourceManagement';
+
 
 interface GlobalConfigContentProps {
   startupConfig?: TStartupConfig;
@@ -22,7 +25,10 @@ type TabType =
   | 'mcp'
   | 'availableTools'
   | 'users'
-  | 'features';
+  | 'features'
+  | 'projects'
+  | 'datasources';
+
 
 const isValidTab = (tab: string | null): tab is TabType => {
   return (
@@ -32,7 +38,10 @@ const isValidTab = (tab: string | null): tab is TabType => {
     tab === 'mcp' ||
     tab === 'availableTools' ||
     tab === 'users' ||
-    tab === 'features'
+    tab === 'features' ||
+    tab === 'projects' ||
+    tab === 'datasources'
+
   );
 };
 
@@ -92,6 +101,16 @@ export default function GlobalConfigContent({ startupConfig: propStartupConfig }
       id: 'features',
       label: '初始界面配置',
       description: '管理初始界面的欢迎语和模型',
+    },
+    {
+      id: 'projects',
+      label: '项目管理',
+      description: '管理 DAT 项目配置',
+    },
+    {
+      id: 'datasources',
+      label: '数据源管理',
+      description: '管理数据库连接配置',
     },
   ];
 
@@ -157,6 +176,17 @@ export default function GlobalConfigContent({ startupConfig: propStartupConfig }
             <FeaturesManagement startupConfig={startupConfig} />
           </div>
         )}
+        {activeTab === 'projects' && (
+          <div className="h-full overflow-hidden px-4 py-4">
+            <ProjectsManagement />
+          </div>
+        )}
+        {activeTab === 'datasources' && (
+          <div className="h-full overflow-hidden px-4 py-4">
+            <DatasourceManagement />
+          </div>
+        )}
+
       </div>
     </div>
   );

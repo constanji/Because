@@ -144,6 +144,8 @@ const startServer = async () => {
 
   app.use('/api/tags', routes.tags);
   app.use('/api/mcp', routes.mcp);
+  app.use('/api/dat-projects', routes.datProjects);
+  app.use('/api/dat-datasources', routes.datDatasources);
 
   app.use(ErrorController);
 
