@@ -66,7 +66,7 @@ export function useToolCallsWithThoughtChains(): {
         const messagesHash = JSON.stringify(
           messages.map((m: any) => {
             const toolCallContents =
-              m.content?.filter((c: any) => c.type === "tool_call") || [];
+              m.content?.filter((c: any) => c && c.type === "tool_call") || [];
             return {
               id: m.messageId,
               unfinished: m.unfinished,

@@ -15,12 +15,18 @@ import {
     Database,
     Search,
     X,
-    HelpCircle
+    FileText,
+    Code,
+    ArrowLeftRight,
+    Upload,
+    Inbox
 } from 'lucide-react';
 import { providerConfigs, ProviderType } from '~/constants/projectConfig';
 import ProviderConfigForm from './components/ProviderConfigForm';
 import EmailSenderConfig from './components/EmailSenderConfig';
 import McpServersConfig from './components/McpServersConfig';
+
+const DAT_API_BASE = import.meta.env.VITE_DAT_OPENAPI_BASE_URL || 'http://localhost:8080';
 
 // 类型定义
 interface LlmConfig {
@@ -59,6 +65,26 @@ interface DatProject {
     createdAt: string;
     updatedAt: string;
 }
+
+// Content Management Types
+interface SqlPair {
+    id: string;
+    question: string;
+    sql: string;
+}
+
+interface Synonym {
+    id: string;
+    word: string;
+    synonyms: string[];
+}
+
+interface DocItem {
+    id: string;
+    content: string;
+}
+
+type ContentTabType = 'sql-pairs' | 'synonyms' | 'docs';
 
 // 默认项目数据
 const getDefaultProject = (): Omit<DatProject, '_id' | 'createdAt' | 'updatedAt'> => ({
@@ -123,6 +149,30 @@ export default function ProjectsManagement() {
     const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('basic');
+
+    // Content Management State
+    const [contentManagementProject, setContentManagementProject] = useState<DatProject | null>(null);
+    const [contentActiveTab, setContentActiveTab] = useState<ContentTabType>('sql-pairs');
+    const [contentLoading, setContentLoading] = useState(false);
+
+    // SQL Pairs
+    const [sqlPairs, setSqlPairs] = useState<SqlPair[]>([]);
+    const [sqlSearchQuery, setSqlSearchQuery] = useState('');
+    const [sqlModalVisible, setSqlModalVisible] = useState(false);
+    const [sqlForm, setSqlForm] = useState({ question: '', sql: '' });
+
+    // Synonyms
+    const [synonyms, setSynonyms] = useState<Synonym[]>([]);
+    const [synSearchQuery, setSynSearchQuery] = useState('');
+    const [synModalVisible, setSynModalVisible] = useState(false);
+    const [synForm, setSynForm] = useState({ word: '', synonyms: '' });
+
+    // Docs
+    const [docs, setDocs] = useState<DocItem[]>([]);
+    const [docSearchQuery, setDocSearchQuery] = useState('');
+    const [docModalVisible, setDocModalVisible] = useState(false);
+    const [docForm, setDocForm] = useState({ content: '' });
+    const [uploading, setUploading] = useState(false);
 
     // 获取 API 基础路径
     const getApiBase = useCallback(() => {
@@ -376,6 +426,353 @@ export default function ProjectsManagement() {
         }
     };
 
+    // ============ Content Management API Functions ============
+
+    // Open content management for a project
+    const openContentManagement = (project: DatProject) => {
+        setContentManagementProject(project);
+        setContentActiveTab('sql-pairs');
+        setSqlPairs([]);
+        setSynonyms([]);
+        setDocs([]);
+        setSqlSearchQuery('');
+        setSynSearchQuery('');
+        setDocSearchQuery('');
+        loadSqlPairs(project._id);
+    };
+
+    // Close content management
+    const closeContentManagement = () => {
+        setContentManagementProject(null);
+        setSqlPairs([]);
+        setSynonyms([]);
+        setDocs([]);
+    };
+
+    // ---- SQL Pairs ----
+    const loadSqlPairs = async (projectId: string) => {
+        setContentLoading(true);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/sql-pairs?projectId=${projectId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setSqlPairs(data || []);
+            }
+        } catch (error) {
+            console.error('Failed to load SQL pairs:', error);
+            setSqlPairs([]);
+        } finally {
+            setContentLoading(false);
+        }
+    };
+
+    const searchSqlPairs = async () => {
+        if (!contentManagementProject || !sqlSearchQuery.trim()) {
+            if (contentManagementProject) loadSqlPairs(contentManagementProject._id);
+            return;
+        }
+        setContentLoading(true);
+        try {
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/content-store/sql-pairs/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(sqlSearchQuery)}`
+            );
+            if (response.ok) {
+                const data = await response.json();
+                setSqlPairs(data || []);
+                showToast({ message: `检索到 ${data?.length || 0} 个相关结果`, status: 'success' });
+            }
+        } catch (error) {
+            showToast({ message: `检索失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setContentLoading(false);
+        }
+    };
+
+    const handleAddSqlPair = async () => {
+        if (!contentManagementProject || !sqlForm.question || !sqlForm.sql) {
+            showToast({ message: '请填写问题和SQL', status: 'warning' });
+            return;
+        }
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/sql-pairs?projectId=${contentManagementProject._id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(sqlForm)
+            });
+            if (response.ok) {
+                showToast({ message: '添加成功', status: 'success' });
+                setSqlModalVisible(false);
+                setSqlForm({ question: '', sql: '' });
+                loadSqlPairs(contentManagementProject._id);
+            } else {
+                throw new Error('添加失败');
+            }
+        } catch (error) {
+            showToast({ message: `添加失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleRemoveSqlPair = async (id: string) => {
+        if (!contentManagementProject) return;
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/sql-pairs/${id}?projectId=${contentManagementProject._id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                showToast({ message: '删除成功', status: 'success' });
+                loadSqlPairs(contentManagementProject._id);
+            }
+        } catch (error) {
+            showToast({ message: `删除失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleClearAllSqlPairs = async () => {
+        if (!contentManagementProject) return;
+        if (!confirm('确定要清空所有SQL示例对吗？此操作不可恢复！')) return;
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/sql-pairs?projectId=${contentManagementProject._id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                showToast({ message: '清空成功', status: 'success' });
+                setSqlPairs([]);
+            }
+        } catch (error) {
+            showToast({ message: `清空失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    // ---- Synonyms ----
+    const loadSynonyms = async (projectId: string) => {
+        setContentLoading(true);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/synonyms?projectId=${projectId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setSynonyms(data || []);
+            }
+        } catch (error) {
+            console.error('Failed to load synonyms:', error);
+            setSynonyms([]);
+        } finally {
+            setContentLoading(false);
+        }
+    };
+
+    const searchSynonyms = async () => {
+        if (!contentManagementProject || !synSearchQuery.trim()) {
+            if (contentManagementProject) loadSynonyms(contentManagementProject._id);
+            return;
+        }
+        setContentLoading(true);
+        try {
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/content-store/synonyms/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(synSearchQuery)}`
+            );
+            if (response.ok) {
+                const data = await response.json();
+                setSynonyms(data || []);
+                showToast({ message: `检索到 ${data?.length || 0} 个相关结果`, status: 'success' });
+            }
+        } catch (error) {
+            showToast({ message: `检索失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setContentLoading(false);
+        }
+    };
+
+    const handleAddSynonym = async () => {
+        if (!contentManagementProject || !synForm.word || !synForm.synonyms) {
+            showToast({ message: '请填写词和同义词', status: 'warning' });
+            return;
+        }
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/synonyms?projectId=${contentManagementProject._id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    word: synForm.word,
+                    synonyms: synForm.synonyms.split(',').map(s => s.trim()).filter(Boolean)
+                })
+            });
+            if (response.ok) {
+                showToast({ message: '添加成功', status: 'success' });
+                setSynModalVisible(false);
+                setSynForm({ word: '', synonyms: '' });
+                loadSynonyms(contentManagementProject._id);
+            } else {
+                throw new Error('添加失败');
+            }
+        } catch (error) {
+            showToast({ message: `添加失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleRemoveSynonym = async (id: string) => {
+        if (!contentManagementProject) return;
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/synonyms/${id}?projectId=${contentManagementProject._id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                showToast({ message: '删除成功', status: 'success' });
+                loadSynonyms(contentManagementProject._id);
+            }
+        } catch (error) {
+            showToast({ message: `删除失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleClearAllSynonyms = async () => {
+        if (!contentManagementProject) return;
+        if (!confirm('确定要清空所有同义词吗？此操作不可恢复！')) return;
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/synonyms?projectId=${contentManagementProject._id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                showToast({ message: '清空成功', status: 'success' });
+                setSynonyms([]);
+            }
+        } catch (error) {
+            showToast({ message: `清空失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    // ---- Docs ----
+    const loadDocs = async (projectId: string) => {
+        setContentLoading(true);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs?projectId=${projectId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setDocs(data || []);
+            }
+        } catch (error) {
+            console.error('Failed to load docs:', error);
+            setDocs([]);
+        } finally {
+            setContentLoading(false);
+        }
+    };
+
+    const searchDocs = async () => {
+        if (!contentManagementProject || !docSearchQuery.trim()) {
+            if (contentManagementProject) loadDocs(contentManagementProject._id);
+            return;
+        }
+        setContentLoading(true);
+        try {
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/content-store/docs/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(docSearchQuery)}`
+            );
+            if (response.ok) {
+                const data = await response.json();
+                setDocs(data || []);
+                showToast({ message: `检索到 ${data?.length || 0} 个相关结果`, status: 'success' });
+            }
+        } catch (error) {
+            showToast({ message: `检索失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setContentLoading(false);
+        }
+    };
+
+    const handleAddDoc = async () => {
+        if (!contentManagementProject || !docForm.content) {
+            showToast({ message: '请填写知识内容', status: 'warning' });
+            return;
+        }
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs?projectId=${contentManagementProject._id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: docForm.content })
+            });
+            if (response.ok) {
+                showToast({ message: '添加成功', status: 'success' });
+                setDocModalVisible(false);
+                setDocForm({ content: '' });
+                loadDocs(contentManagementProject._id);
+            } else {
+                throw new Error('添加失败');
+            }
+        } catch (error) {
+            showToast({ message: `添加失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleRemoveDoc = async (id: string) => {
+        if (!contentManagementProject) return;
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs/${id}?projectId=${contentManagementProject._id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                showToast({ message: '删除成功', status: 'success' });
+                loadDocs(contentManagementProject._id);
+            }
+        } catch (error) {
+            showToast({ message: `删除失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleClearAllDocs = async () => {
+        if (!contentManagementProject) return;
+        if (!confirm('确定要清空所有业务知识吗？此操作不可恢复！')) return;
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs?projectId=${contentManagementProject._id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                showToast({ message: '清空成功', status: 'success' });
+                setDocs([]);
+            }
+        } catch (error) {
+            showToast({ message: `清空失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!contentManagementProject || !e.target.files?.[0]) return;
+        const file = e.target.files[0];
+        setUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs/upload?projectId=${contentManagementProject._id}`, {
+                method: 'POST',
+                body: formData
+            });
+            if (response.ok) {
+                const result = await response.json();
+                showToast({ message: `文件 "${result.filename}" 上传成功`, status: 'success' });
+                loadDocs(contentManagementProject._id);
+            } else {
+                throw new Error('上传失败');
+            }
+        } catch (error) {
+            showToast({ message: `上传失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setUploading(false);
+            e.target.value = '';
+        }
+    };
+
+    // Handle content tab change
+    const handleContentTabChange = (tab: ContentTabType) => {
+        setContentActiveTab(tab);
+        if (!contentManagementProject) return;
+        if (tab === 'sql-pairs') {
+            loadSqlPairs(contentManagementProject._id);
+        } else if (tab === 'synonyms') {
+            loadSynonyms(contentManagementProject._id);
+        } else {
+            loadDocs(contentManagementProject._id);
+        }
+    };
+
     return (
         <div className="flex h-full flex-col">
             {/* 头部 */}
@@ -383,7 +780,7 @@ export default function ProjectsManagement() {
                 <div>
                     <h2 className="text-lg font-semibold text-text-primary">项目管理</h2>
                     <p className="mt-1 text-sm text-text-secondary">
-                        管理 DAT 项目配置，包括 LLM、Agent、嵌入模型等
+                        管理 BecauseAI 项目配置，包括 LLM、Agent、嵌入模型、内容管理等
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -470,6 +867,14 @@ export default function ProjectsManagement() {
                                         )}
                                     </div>
                                     <div className="ml-4 flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => openContentManagement(project)}
+                                            className="rounded p-1.5 text-text-secondary transition-colors hover:bg-surface-hover"
+                                            title="内容管理"
+                                        >
+                                            <FileText className="h-4 w-4" />
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -909,6 +1314,438 @@ export default function ProjectsManagement() {
                             >
                                 {isSaving ? '保存中...' : '保存'}
                             </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Content Management Modal */}
+            {contentManagementProject && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+                    <div className="relative flex h-[90vh] w-full max-w-5xl flex-col rounded-lg border border-border-light bg-surface-primary shadow-lg overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <div className="flex items-center gap-3">
+                                <FileText className="h-5 w-5 text-text-secondary" />
+                                <div>
+                                    <h3 className="text-lg font-semibold text-text-primary">内容管理</h3>
+                                    <p className="text-xs text-text-tertiary">{contentManagementProject.name}</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeContentManagement}
+                                className="rounded p-1 text-text-secondary hover:bg-surface-hover"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-border-light px-4">
+                            <button
+                                type="button"
+                                onClick={() => handleContentTabChange('sql-pairs')}
+                                className={cn(
+                                    "px-4 py-3 text-sm font-medium border-b-2 -mb-[1px] transition-colors flex items-center gap-1.5",
+                                    contentActiveTab === 'sql-pairs'
+                                        ? "border-blue-500 text-blue-600"
+                                        : "border-transparent text-text-secondary hover:text-text-primary"
+                                )}
+                            >
+                                <Code className="h-4 w-4" />
+                                SQL 示例对
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleContentTabChange('synonyms')}
+                                className={cn(
+                                    "px-4 py-3 text-sm font-medium border-b-2 -mb-[1px] transition-colors flex items-center gap-1.5",
+                                    contentActiveTab === 'synonyms'
+                                        ? "border-blue-500 text-blue-600"
+                                        : "border-transparent text-text-secondary hover:text-text-primary"
+                                )}
+                            >
+                                <ArrowLeftRight className="h-4 w-4" />
+                                同义词
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleContentTabChange('docs')}
+                                className={cn(
+                                    "px-4 py-3 text-sm font-medium border-b-2 -mb-[1px] transition-colors flex items-center gap-1.5",
+                                    contentActiveTab === 'docs'
+                                        ? "border-blue-500 text-blue-600"
+                                        : "border-transparent text-text-secondary hover:text-text-primary"
+                                )}
+                            >
+                                <FileText className="h-4 w-4" />
+                                业务知识
+                            </button>
+                        </div>
+
+                        {/* Tab Content */}
+                        <div className="flex-1 overflow-auto p-4">
+                            {/* SQL Pairs Tab */}
+                            {contentActiveTab === 'sql-pairs' && (
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+                                                <input
+                                                    type="text"
+                                                    value={sqlSearchQuery}
+                                                    onChange={(e) => setSqlSearchQuery(e.target.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && searchSqlPairs()}
+                                                    placeholder="输入问题检索相关SQL..."
+                                                    className="w-72 pl-8 pr-3 py-2 text-sm rounded-md border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                />
+                                            </div>
+                                            <Button onClick={searchSqlPairs} className="btn btn-neutral text-sm">
+                                                检索
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button onClick={() => setSqlModalVisible(true)} className="btn btn-primary text-sm flex items-center gap-1">
+                                                <Plus className="h-4 w-4" /> 添加
+                                            </Button>
+                                            <Button
+                                                onClick={handleClearAllSqlPairs}
+                                                disabled={sqlPairs.length === 0}
+                                                className="btn btn-neutral text-sm text-red-500 disabled:opacity-50"
+                                            >
+                                                清空全部
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    {contentLoading ? (
+                                        <div className="flex h-40 items-center justify-center text-text-secondary">
+                                            <p className="text-sm">加载中...</p>
+                                        </div>
+                                    ) : sqlPairs.length === 0 ? (
+                                        <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
+                                            <Code className="h-8 w-8" />
+                                            <p className="text-sm">暂无SQL示例对</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-surface-secondary">
+                                                        <th className="border border-border-light px-3 py-2 text-left font-medium w-2/5">问题</th>
+                                                        <th className="border border-border-light px-3 py-2 text-left font-medium">SQL</th>
+                                                        <th className="border border-border-light px-3 py-2 text-center font-medium w-16">操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {sqlPairs.map((item, idx) => (
+                                                        <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
+                                                            <td className="border border-border-light px-3 py-2 text-blue-600 dark:text-blue-400">{item.question}</td>
+                                                            <td className="border border-border-light px-3 py-2">
+                                                                <code className="text-xs font-mono text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">{item.sql}</code>
+                                                            </td>
+                                                            <td className="border border-border-light px-3 py-2 text-center">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (confirm('确定删除此项吗？')) handleRemoveSqlPair(item.id);
+                                                                    }}
+                                                                    className="text-red-500 hover:text-red-600"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Synonyms Tab */}
+                            {contentActiveTab === 'synonyms' && (
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+                                                <input
+                                                    type="text"
+                                                    value={synSearchQuery}
+                                                    onChange={(e) => setSynSearchQuery(e.target.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && searchSynonyms()}
+                                                    placeholder="输入词语检索相关同义词..."
+                                                    className="w-72 pl-8 pr-3 py-2 text-sm rounded-md border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                />
+                                            </div>
+                                            <Button onClick={searchSynonyms} className="btn btn-neutral text-sm">
+                                                检索
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button onClick={() => setSynModalVisible(true)} className="btn btn-primary text-sm flex items-center gap-1">
+                                                <Plus className="h-4 w-4" /> 添加
+                                            </Button>
+                                            <Button
+                                                onClick={handleClearAllSynonyms}
+                                                disabled={synonyms.length === 0}
+                                                className="btn btn-neutral text-sm text-red-500 disabled:opacity-50"
+                                            >
+                                                清空全部
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    {contentLoading ? (
+                                        <div className="flex h-40 items-center justify-center text-text-secondary">
+                                            <p className="text-sm">加载中...</p>
+                                        </div>
+                                    ) : synonyms.length === 0 ? (
+                                        <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
+                                            <ArrowLeftRight className="h-8 w-8" />
+                                            <p className="text-sm">暂无同义词</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-surface-secondary">
+                                                        <th className="border border-border-light px-3 py-2 text-left font-medium w-32">词</th>
+                                                        <th className="border border-border-light px-3 py-2 text-left font-medium">同义词</th>
+                                                        <th className="border border-border-light px-3 py-2 text-center font-medium w-16">操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {synonyms.map((item, idx) => (
+                                                        <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
+                                                            <td className="border border-border-light px-3 py-2 font-medium">{item.word}</td>
+                                                            <td className="border border-border-light px-3 py-2">
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {item.synonyms.map((syn, i) => (
+                                                                        <span key={i} className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-900/30 dark:text-blue-400">
+                                                                            {syn}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </td>
+                                                            <td className="border border-border-light px-3 py-2 text-center">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (confirm('确定删除此项吗？')) handleRemoveSynonym(item.id);
+                                                                    }}
+                                                                    className="text-red-500 hover:text-red-600"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Docs Tab */}
+                            {contentActiveTab === 'docs' && (
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+                                                <input
+                                                    type="text"
+                                                    value={docSearchQuery}
+                                                    onChange={(e) => setDocSearchQuery(e.target.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && searchDocs()}
+                                                    placeholder="输入关键词检索相关知识..."
+                                                    className="w-72 pl-8 pr-3 py-2 text-sm rounded-md border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                />
+                                            </div>
+                                            <Button onClick={searchDocs} className="btn btn-neutral text-sm">
+                                                检索
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button onClick={() => setDocModalVisible(true)} className="btn btn-primary text-sm flex items-center gap-1">
+                                                <Plus className="h-4 w-4" /> 添加文本
+                                            </Button>
+                                            <label className="btn btn-neutral text-sm flex items-center gap-1 cursor-pointer">
+                                                <Upload className="h-4 w-4" />
+                                                {uploading ? '上传中...' : '上传文件'}
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept=".txt,.md,.pdf,.doc,.docx,.html,.xml,.json,.csv"
+                                                    onChange={handleFileUpload}
+                                                    disabled={uploading}
+                                                />
+                                            </label>
+                                            <Button
+                                                onClick={handleClearAllDocs}
+                                                disabled={docs.length === 0}
+                                                className="btn btn-neutral text-sm text-red-500 disabled:opacity-50"
+                                            >
+                                                清空全部
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    {contentLoading ? (
+                                        <div className="flex h-40 items-center justify-center text-text-secondary">
+                                            <p className="text-sm">加载中...</p>
+                                        </div>
+                                    ) : docs.length === 0 ? (
+                                        <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
+                                            <Inbox className="h-8 w-8" />
+                                            <p className="text-sm">暂无业务知识</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-surface-secondary">
+                                                        <th className="border border-border-light px-3 py-2 text-left font-medium w-16">序号</th>
+                                                        <th className="border border-border-light px-3 py-2 text-left font-medium">内容</th>
+                                                        <th className="border border-border-light px-3 py-2 text-center font-medium w-16">操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {docs.map((item, idx) => (
+                                                        <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
+                                                            <td className="border border-border-light px-3 py-2 text-center">{idx + 1}</td>
+                                                            <td className="border border-border-light px-3 py-2">
+                                                                <p className="line-clamp-2">{item.content}</p>
+                                                            </td>
+                                                            <td className="border border-border-light px-3 py-2 text-center">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (confirm('确定删除此项吗？')) handleRemoveDoc(item.id);
+                                                                    }}
+                                                                    className="text-red-500 hover:text-red-600"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SQL Pair Add Modal */}
+            {sqlModalVisible && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-lg rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <h3 className="text-lg font-semibold text-text-primary">添加 SQL 示例对</h3>
+                            <button onClick={() => setSqlModalVisible(false)} className="rounded p-1 text-text-secondary hover:bg-surface-hover">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">问题 <span className="text-red-500">*</span></label>
+                                <input
+                                    type="text"
+                                    value={sqlForm.question}
+                                    onChange={(e) => setSqlForm(prev => ({ ...prev, question: e.target.value }))}
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    placeholder="例如：本月销售额是多少？"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">SQL <span className="text-red-500">*</span></label>
+                                <textarea
+                                    value={sqlForm.sql}
+                                    onChange={(e) => setSqlForm(prev => ({ ...prev, sql: e.target.value }))}
+                                    rows={4}
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    placeholder="例如：SELECT SUM(amount) FROM sales WHERE month = CURRENT_MONTH"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-border-light p-4">
+                            <Button onClick={() => setSqlModalVisible(false)} className="btn btn-neutral">取消</Button>
+                            <Button onClick={handleAddSqlPair} className="btn btn-primary">确定</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Synonym Add Modal */}
+            {synModalVisible && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-md rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <h3 className="text-lg font-semibold text-text-primary">添加同义词</h3>
+                            <button onClick={() => setSynModalVisible(false)} className="rounded p-1 text-text-secondary hover:bg-surface-hover">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">词 <span className="text-red-500">*</span></label>
+                                <input
+                                    type="text"
+                                    value={synForm.word}
+                                    onChange={(e) => setSynForm(prev => ({ ...prev, word: e.target.value }))}
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    placeholder="例如：销售额"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">同义词（多个用逗号分隔） <span className="text-red-500">*</span></label>
+                                <input
+                                    type="text"
+                                    value={synForm.synonyms}
+                                    onChange={(e) => setSynForm(prev => ({ ...prev, synonyms: e.target.value }))}
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    placeholder="例如：营收,营业额,销售收入"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-border-light p-4">
+                            <Button onClick={() => setSynModalVisible(false)} className="btn btn-neutral">取消</Button>
+                            <Button onClick={handleAddSynonym} className="btn btn-primary">确定</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Doc Add Modal */}
+            {docModalVisible && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-lg rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <h3 className="text-lg font-semibold text-text-primary">添加业务知识</h3>
+                            <button onClick={() => setDocModalVisible(false)} className="rounded p-1 text-text-secondary hover:bg-surface-hover">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="p-4">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">知识内容 <span className="text-red-500">*</span></label>
+                                <textarea
+                                    value={docForm.content}
+                                    onChange={(e) => setDocForm(prev => ({ ...prev, content: e.target.value }))}
+                                    rows={6}
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    placeholder="输入业务知识、术语定义或规则说明..."
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-border-light p-4">
+                            <Button onClick={() => setDocModalVisible(false)} className="btn btn-neutral">取消</Button>
+                            <Button onClick={handleAddDoc} className="btn btn-primary">确定</Button>
                         </div>
                     </div>
                 </div>
