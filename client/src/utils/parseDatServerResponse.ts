@@ -1,5 +1,5 @@
 /**
- * 解析 dat-server MCP 响应中的思维链数据
+ * 解析 becauseai-server MCP 响应中的思维链数据
  * 响应格式示例：
  * "--------------------- intent_classification ---------------------\n{...}\n--------------------- sql_generation_reasoning ---------------------\n..."
  */
@@ -260,7 +260,7 @@ export function parseDatServerResponse(response: string): ThoughtChainData | nul
 }
 
 /**
- * 从消息中提取所有 dat-server 工具调用的思维链数据
+ * 从消息中提取所有 becauseai-server 工具调用的思维链数据
  * 返回按时间顺序排列的思维链数组（从旧到新）
  */
 export function extractAllDatServerThoughtChains(messages: any[]): ThoughtChainData[] {
@@ -271,7 +271,7 @@ export function extractAllDatServerThoughtChains(messages: any[]): ThoughtChainD
 }
 
 /**
- * 从消息中提取所有工具调用（包括 dat-server 和其他工具）
+ * 从消息中提取所有工具调用（包括 becauseai-server 和其他工具）
  * 返回按时间顺序排列的数组（从旧到新）
  */
 export function extractAllToolCalls(messages: any[]): ToolCallWithThoughtChain[] {
@@ -310,10 +310,10 @@ export function extractAllToolCalls(messages: any[]): ToolCallWithThoughtChain[]
 
             if (toolName.includes(Constants.mcp_delimiter)) {
                 const [, serverName] = toolName.split(Constants.mcp_delimiter);
-                if (serverName === 'dat-server') {
+                if (serverName === 'becauseai-server') {
                     isDatServerTool = true;
                 }
-            } else if (toolName.includes('dat-server')) {
+            } else if (toolName.includes('becauseai-server')) {
                 isDatServerTool = true;
             }
 
@@ -342,7 +342,7 @@ export function extractAllToolCalls(messages: any[]): ToolCallWithThoughtChain[]
 }
 
 /**
- * 从消息中提取所有 dat-server 工具调用及其对应的思维链数据
+ * 从消息中提取所有 becauseai-server 工具调用及其对应的思维链数据
  * 返回按时间顺序排列的数组（从旧到新）
  * @deprecated 使用 extractAllToolCalls 获取所有工具调用
  */
@@ -389,7 +389,7 @@ export function extractToolCallsByMessage(messages: any[]): MessageToolCalls[] {
                 continue;
             }
 
-            const toolName = functionData.name || '';
+            const toolName = functionData.name || "";
             const output = functionData.output || toolCall.output;
 
             let isDatServerTool = false;
@@ -397,11 +397,11 @@ export function extractToolCallsByMessage(messages: any[]): MessageToolCalls[] {
 
             if (toolName.includes(Constants.mcp_delimiter)) {
                 const [, serverName] = toolName.split(Constants.mcp_delimiter);
-                if (serverName === 'dat-server') {
+                if (serverName === 'becauseai-server') {
                     isDatServerTool = true;
                 }
-            } else if (toolName.includes('dat-server')) {
-                isDatServerTool = true;
+            } else if (toolName.includes("becauseai-server")) {
+              isDatServerTool = true;
             }
 
             if (isDatServerTool && output && typeof output === 'string') {
@@ -447,7 +447,7 @@ export function extractToolCallsByMessage(messages: any[]): MessageToolCalls[] {
 }
 
 /**
- * 从消息中提取 dat-server 工具调用的思维链数据（仅返回最新的一个，保持向后兼容）
+ * 从消息中提取 becauseai-server 工具调用的思维链数据（仅返回最新的一个，保持向后兼容）
  * @deprecated 使用 extractAllDatServerThoughtChains 获取所有思维链
  */
 export function extractDatServerThoughtChain(messages: any[]): ThoughtChainData | null {

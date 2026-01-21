@@ -22,6 +22,7 @@ import Search from './Search';
 import Root from './Root';
 import AgentBuilder from './AgentBuilder';
 import GlobalConfigManager from './GlobalConfigManager';
+import AssetCenterContent from "~/components/GlobalConfig/AssetCenterContent";
 
 const AuthLayout = () => (
   <AuthContextProvider>
@@ -36,45 +37,45 @@ const baseHref = baseEl?.getAttribute('href') || '/';
 export const router = createBrowserRouter(
   [
     {
-      path: 'share/:shareId',
+      path: "share/:shareId",
       element: <ShareRoute />,
       errorElement: <RouteErrorBoundary />,
     },
     {
-      path: 'oauth',
+      path: "oauth",
       errorElement: <RouteErrorBoundary />,
       children: [
         {
-          path: 'success',
+          path: "success",
           element: <OAuthSuccess />,
         },
         {
-          path: 'error',
+          path: "error",
           element: <OAuthError />,
         },
       ],
     },
     {
-      path: '/',
+      path: "/",
       element: <StartupLayout />,
       errorElement: <RouteErrorBoundary />,
       children: [
         {
-          path: 'register',
+          path: "register",
           element: <Registration />,
         },
         {
-          path: 'forgot-password',
+          path: "forgot-password",
           element: <RequestPasswordReset />,
         },
         {
-          path: 'reset-password',
+          path: "reset-password",
           element: <ResetPassword />,
         },
       ],
     },
     {
-      path: 'verify',
+      path: "verify",
       element: <VerifyEmail />,
       errorElement: <RouteErrorBoundary />,
     },
@@ -83,22 +84,22 @@ export const router = createBrowserRouter(
       errorElement: <RouteErrorBoundary />,
       children: [
         {
-          path: '/',
+          path: "/",
           element: <LoginLayout />,
           children: [
             {
-              path: 'login',
+              path: "login",
               element: <Login />,
             },
             {
-              path: 'login/2fa',
+              path: "login/2fa",
               element: <TwoFactorScreen />,
             },
           ],
         },
         dashboardRoutes,
         {
-          path: '/',
+          path: "/",
           element: <Root />,
           children: [
             {
@@ -106,19 +107,19 @@ export const router = createBrowserRouter(
               element: <Navigate to="/c/new" replace={true} />,
             },
             {
-              path: 'c/:conversationId?',
+              path: "c/:conversationId?",
               element: <ChatRoute />,
             },
             {
-              path: 'search',
+              path: "search",
               element: <Search />,
             },
             {
-              path: 'agent-builder',
+              path: "agent-builder",
               element: <AgentBuilder />,
             },
             {
-              path: 'agents',
+              path: "agents",
               element: (
                 <MarketplaceProvider>
                   <AgentMarketplace />
@@ -126,7 +127,7 @@ export const router = createBrowserRouter(
               ),
             },
             {
-              path: 'agents/:category',
+              path: "agents/:category",
               element: (
                 <MarketplaceProvider>
                   <AgentMarketplace />
@@ -134,8 +135,12 @@ export const router = createBrowserRouter(
               ),
             },
             {
-              path: 'global-config',
+              path: "global-config",
               element: <GlobalConfigManager />,
+            },
+            {
+              path: "asset-center",
+              element: <AssetCenterContent />,
             },
           ],
         },

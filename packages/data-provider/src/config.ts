@@ -887,17 +887,17 @@ export const configSchema = z.object({
 export type DeepPartial<T> = T extends (infer U)[]
   ? DeepPartial<U>[]
   : T extends ReadonlyArray<infer U>
-    ? ReadonlyArray<DeepPartial<U>>
-    : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-      T extends Function
-      ? T
-      : T extends Date
-        ? T
-        : T extends object
-          ? {
-              [P in keyof T]?: DeepPartial<T[P]>;
-            }
-          : T;
+  ? ReadonlyArray<DeepPartial<U>>
+  : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  T extends Function
+  ? T
+  : T extends Date
+  ? T
+  : T extends object
+  ? {
+    [P in keyof T]?: DeepPartial<T[P]>;
+  }
+  : T;
 
 export const getConfigDefaults = () => getSchemaDefaults(configSchema);
 export type TCustomConfig = DeepPartial<z.infer<typeof configSchema>>;
@@ -1582,6 +1582,8 @@ export enum LocalStorageKeys {
   PIN_WEB_SEARCH_ = 'PIN_WEB_SEARCH_',
   /** Pin state for Code Interpreter per conversation ID */
   PIN_CODE_INTERPRETER_ = 'PIN_CODE_INTERPRETER_',
+  /** Key for the last selected data source ID */
+  LAST_DATA_SOURCE_ID = 'lastDataSourceId',
 }
 
 export enum ForkOptions {

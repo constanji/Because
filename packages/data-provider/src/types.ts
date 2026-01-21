@@ -114,15 +114,15 @@ export type TPayload = Partial<TMessage> &
 
 export type TEditedContent =
   | {
-      index: number;
-      type: ContentTypes.THINK;
-      [ContentTypes.THINK]: string;
-    }
+    index: number;
+    type: ContentTypes.THINK;
+    [ContentTypes.THINK]: string;
+  }
   | {
-      index: number;
-      type: ContentTypes.TEXT;
-      [ContentTypes.TEXT]: string;
-    };
+    index: number;
+    type: ContentTypes.TEXT;
+    [ContentTypes.TEXT]: string;
+  };
 
 export type TSubmission = {
   plugin?: TResPlugin;

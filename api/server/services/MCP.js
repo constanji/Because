@@ -1,33 +1,35 @@
-const { z } = require('zod');
-const { tool } = require('@langchain/core/tools');
-const { logger } = require('@because/data-schemas');
+const { z } = require("zod");
+const { tool } = require("@langchain/core/tools");
+const { logger } = require("@because/data-schemas");
 const {
   Providers,
   StepTypes,
   GraphEvents,
   Constants: AgentConstants,
-} = require('@because/agents');
+} = require("@because/agents");
 const {
   sendEvent,
   MCPOAuthHandler,
   normalizeServerName,
   convertWithResolvedRefs,
-} = require('@because/api');
+} = require("@because/api");
 const {
   Time,
   CacheKeys,
   Constants,
   ContentTypes,
   isAssistantsEndpoint,
-} = require('@because/data-provider');
-const { getMCPManager, getFlowStateManager, getOAuthReconnectionManager } = require('~/config');
-const { findToken, createToken, updateToken } = require('~/models');
-const { reinitMCPServer } = require('./Tools/mcp');
-const { getDataSourceByAgentId } = require('./DataSource');
-const { getAppConfig } = require('./Config');
-const { getLogStores } = require('~/cache');
-const { mcpServersRegistry } = require('@because/api');
-
+} = require("@because/data-provider");
+const {
+  getMCPManager,
+  getFlowStateManager,
+  getOAuthReconnectionManager,
+} = require("~/config");
+const { findToken, createToken, updateToken } = require("~/models");
+const { reinitMCPServer } = require("./Tools/mcp");
+const { getAppConfig } = require("./Config");
+const { getLogStores } = require("~/cache");
+const { mcpServersRegistry } = require("@because/api");
 
 /**
  * @param {object} params
@@ -46,7 +48,7 @@ function createRunStepDeltaEmitter({ res, stepId, toolCall }) {
       id: stepId,
       delta: {
         type: StepTypes.TOOL_CALLS,
-        tool_calls: [{ ...toolCall, args: '' }],
+        tool_calls: [{ ...toolCall, args: "" }],
         auth: authURL,
         expires_at: Date.now() + Time.TWO_MINUTES,
       },
@@ -94,9 +96,9 @@ function createOAuthStart({ flowId, flowManager, callback }) {
    * @returns {Promise<boolean>} Returns true to indicate the event was sent successfully.
    */
   return async function (authURL) {
-    await flowManager.createFlowWithHandler(flowId, 'oauth_login', async () => {
+    await flowManager.createFlowWithHandler(flowId, "oauth_login", async () => {
       callback?.(authURL);
-      logger.debug('Sent OAuth login request to client');
+      logger.debug("Sent OAuth login request to client");
       return true;
     });
   };
@@ -121,7 +123,7 @@ function createOAuthEnd({ res, stepId, toolCall }) {
       },
     };
     sendEvent(res, { event: GraphEvents.ON_RUN_STEP_DELTA, data });
-    logger.debug('Sent OAuth login success to client');
+    logger.debug("Sent OAuth login success to client");
   };
 }
 
@@ -134,9 +136,11 @@ function createOAuthEnd({ res, stepId, toolCall }) {
  */
 function createAbortHandler({ userId, serverName, toolName, flowManager }) {
   return function () {
-    logger.info(`[MCP][User: ${userId}][${serverName}][${toolName}] Tool call aborted`);
+    logger.info(
+      `[MCP][User: ${userId}][${serverName}][${toolName}] Tool call aborted`,
+    );
     const flowId = MCPOAuthHandler.generateFlowId(userId, serverName);
-    flowManager.failFlow(flowId, 'mcp_oauth', new Error('Tool call aborted'));
+    flowManager.failFlow(flowId, "mcp_oauth", new Error("Tool call aborted"));
   };
 }
 
@@ -164,15 +168,22 @@ function createOAuthCallback({ runStepEmitter, runStepDeltaEmitter }) {
  * @param {Record<string, Record<string, string>>} [params.userMCPAuthMap]
  * @returns { Promise<Array<typeof tool | { _call: (toolInput: Object | string) => unknown}>> } An object with `_call` method to execute the tool input.
  */
-async function reconnectServer({ res, user, index, signal, serverName, userMCPAuthMap }) {
+async function reconnectServer({
+  res,
+  user,
+  index,
+  signal,
+  serverName,
+  userMCPAuthMap,
+}) {
   const runId = Constants.USE_PRELIM_RESPONSE_MESSAGE_ID;
   const flowId = `${user.id}:${serverName}:${Date.now()}`;
   const flowManager = getFlowStateManager(getLogStores(CacheKeys.FLOWS));
-  const stepId = 'step_oauth_login_' + serverName;
+  const stepId = "step_oauth_login_" + serverName;
   const toolCall = {
     id: flowId,
     name: serverName,
-    type: 'tool_call_chunk',
+    type: "tool_call_chunk",
   };
 
   const runStepEmitter = createRunStepEmitter({
@@ -224,8 +235,23 @@ async function reconnectServer({ res, user, index, signal, serverName, userMCPAu
  * @param {Record<string, Record<string, string>>} [params.userMCPAuthMap]
  * @returns { Promise<Array<typeof tool | { _call: (toolInput: Object | string) => unknown}>> } An object with `_call` method to execute the tool input.
  */
-async function createMCPTools({ res, user, index, signal, serverName, provider, userMCPAuthMap }) {
-  const result = await reconnectServer({ res, user, index, signal, serverName, userMCPAuthMap });
+async function createMCPTools({
+  res,
+  user,
+  index,
+  signal,
+  serverName,
+  provider,
+  userMCPAuthMap,
+}) {
+  const result = await reconnectServer({
+    res,
+    user,
+    index,
+    signal,
+    serverName,
+    userMCPAuthMap,
+  });
   if (!result || !result.tools) {
     logger.warn(`[MCP][${serverName}] Failed to reinitialize MCP server.`);
     return;
@@ -293,7 +319,9 @@ async function createMCPTool({
   }
 
   if (!toolDefinition) {
-    logger.warn(`[MCP][${serverName}][${toolName}] Tool definition not found, cannot create tool.`);
+    logger.warn(
+      `[MCP][${serverName}][${toolName}] Tool definition not found, cannot create tool.`,
+    );
     return;
   }
 
@@ -306,10 +334,17 @@ async function createMCPTool({
   });
 }
 
-function createToolInstance({ res, toolName, serverName, toolDefinition, provider: _provider }) {
+function createToolInstance({
+  res,
+  toolName,
+  serverName,
+  toolDefinition,
+  provider: _provider,
+}) {
   /** @type {LCTool} */
   const { description, parameters } = toolDefinition;
-  const isGoogle = _provider === Providers.VERTEXAI || _provider === Providers.GOOGLE;
+  const isGoogle =
+    _provider === Providers.VERTEXAI || _provider === Providers.GOOGLE;
   let schema = convertWithResolvedRefs(parameters, {
     allowEmptyObject: !isGoogle,
     transformOneOfAnyOf: true,
@@ -323,7 +358,8 @@ function createToolInstance({ res, toolName, serverName, toolDefinition, provide
 
   /** @type {(toolArguments: Object | string, config?: GraphRunnableConfig) => Promise<unknown>} */
   const _call = async (toolArguments, config) => {
-    const userId = config?.configurable?.user?.id || config?.configurable?.user_id;
+    const userId =
+      config?.configurable?.user?.id || config?.configurable?.user_id;
     /** @type {ReturnType<typeof createAbortHandler>} */
     let abortHandler = null;
     /** @type {AbortSignal} */
@@ -332,7 +368,9 @@ function createToolInstance({ res, toolName, serverName, toolDefinition, provide
     try {
       const flowsCache = getLogStores(CacheKeys.FLOWS);
       const flowManager = getFlowStateManager(flowsCache);
-      derivedSignal = config?.signal ? AbortSignal.any([config.signal]) : undefined;
+      derivedSignal = config?.signal
+        ? AbortSignal.any([config.signal])
+        : undefined;
       const mcpManager = getMCPManager(userId);
       const provider = (config?.metadata?.provider || _provider)?.toLowerCase();
 
@@ -355,43 +393,103 @@ function createToolInstance({ res, toolName, serverName, toolDefinition, provide
       });
 
       if (derivedSignal) {
-        abortHandler = createAbortHandler({ userId, serverName, toolName, flowManager });
-        derivedSignal.addEventListener('abort', abortHandler, { once: true });
+        abortHandler = createAbortHandler({
+          userId,
+          serverName,
+          toolName,
+          flowManager,
+        });
+        derivedSignal.addEventListener("abort", abortHandler, { once: true });
       }
 
       const customUserVars =
-        config?.configurable?.userMCPAuthMap?.[`${Constants.mcp_prefix}${serverName}`];
+        config?.configurable?.userMCPAuthMap?.[
+        `${Constants.mcp_prefix}${serverName}`
+        ];
 
-      // Inject projectId (arg1) and datasourceId (arg2) for dat-server MCP
+      // Inject projectId (arg1) and datasourceId (arg2) for becauseai-server MCP
+      // Get datasourceId from requestBody (passed from frontend selection)
       let finalToolArguments = toolArguments;
-      if (serverName === 'dat-server') {
-        const agentId = config?.configurable?.last_agent_id;
-        logger.info(`[MCP][dat-server] Processing tool call for agent: ${agentId}`);
+      if (serverName === "becauseai-server") {
+        const datasourceId = config?.configurable?.requestBody?.datasourceId;
+        logger.info(
+          `[MCP][becauseai-server] Processing tool call, datasourceId from requestBody: ${datasourceId}`,
+        );
 
-        if (agentId) {
+        if (datasourceId) {
           try {
-            const dataSource = await getDataSourceByAgentId(agentId);
-            if (dataSource && dataSource._id && dataSource.projectId) {
+            // Get datasource info from database to get projectId
+            const { getDatDatasourceModel } = require("~/models/DatDatasource");
+            const DatDatasource = await getDatDatasourceModel();
+            const dataSource = await DatDatasource.findById(datasourceId).lean();
+
+            if (dataSource && dataSource.projectId) {
               finalToolArguments = {
                 ...toolArguments,
-                arg1: dataSource.projectId,  // Project ID
-                arg2: dataSource._id,         // Datasource ID
+                arg1: dataSource.projectId,
+                arg2: datasourceId,
               };
               logger.info(
-                `[MCP][dat-server] Injected: projectId(arg1)=${dataSource.projectId}, datasourceId(arg2)=${dataSource._id}`,
+                `[MCP][becauseai-server] Injected: projectId(arg1)=${dataSource.projectId}, datasourceId(arg2)=${datasourceId}`,
               );
             } else {
-              logger.warn(`[MCP][dat-server] Agent ${agentId} has no bound datasource or missing projectId`);
+              logger.warn(
+                `[MCP][becauseai-server] Datasource ${datasourceId} not found or missing projectId`,
+              );
             }
           } catch (error) {
-            logger.error(`[MCP][dat-server] Error looking up datasource for agent ${agentId}:`, error);
+            logger.error(
+              `[MCP][becauseai-server] Error looking up datasource ${datasourceId}:`,
+              error,
+            );
           }
         } else {
-          logger.warn(`[MCP][dat-server] No agentId available in config.configurable.last_agent_id`);
+          logger.warn(
+            `[MCP][becauseai-server] No datasourceId available in requestBody. Please select a datasource from the business list.`,
+          );
         }
       }
 
 
+      if (serverName === "analysis-server") {
+        const datasourceId = config?.configurable?.requestBody?.datasourceId;
+        logger.info(
+          `[MCP][analysis-server] Processing tool call, datasourceId from requestBody: ${datasourceId}`,
+        );
+
+        if (datasourceId) {
+          try {
+            // Get datasource info from database to get projectId
+            const { getDatDatasourceModel } = require("~/models/DatDatasource");
+            const DatDatasource = await getDatDatasourceModel();
+            const dataSource = await DatDatasource.findById(datasourceId).lean();
+
+            if (dataSource && dataSource.projectId) {
+              finalToolArguments = {
+                ...toolArguments,
+                projectId: dataSource.projectId,
+                datasourceId: datasourceId,
+              };
+              logger.info(
+                `[MCP][analysis-server] Injected: projectId=${dataSource.projectId}, datasourceId=${datasourceId}`,
+              );
+            } else {
+              logger.warn(
+                `[MCP][analysis-server] Datasource ${datasourceId} not found or missing projectId`,
+              );
+            }
+          } catch (error) {
+            logger.error(
+              `[MCP][analysis-server] Error looking up datasource ${datasourceId}:`,
+              error,
+            );
+          }
+        } else {
+          logger.warn(
+            `[MCP][analysis-server] No datasourceId available in requestBody. Please select a datasource from the business list.`,
+          );
+        }
+      }
 
       const result = await mcpManager.callTool({
         serverName,
@@ -418,7 +516,11 @@ function createToolInstance({ res, toolName, serverName, toolDefinition, provide
       if (isAssistantsEndpoint(provider) && Array.isArray(result)) {
         return result[0];
       }
-      if (isGoogle && Array.isArray(result[0]) && result[0][0]?.type === ContentTypes.TEXT) {
+      if (
+        isGoogle &&
+        Array.isArray(result[0]) &&
+        result[0][0]?.type === ContentTypes.TEXT
+      ) {
         return [result[0][0].text, result[1]];
       }
       return result;
@@ -430,10 +532,10 @@ function createToolInstance({ res, toolName, serverName, toolDefinition, provide
 
       /** OAuth error, provide a helpful message */
       const isOAuthError =
-        error.message?.includes('401') ||
-        error.message?.includes('OAuth') ||
-        error.message?.includes('authentication') ||
-        error.message?.includes('Non-200 status code (401)');
+        error.message?.includes("401") ||
+        error.message?.includes("OAuth") ||
+        error.message?.includes("authentication") ||
+        error.message?.includes("Non-200 status code (401)");
 
       if (isOAuthError) {
         throw new Error(
@@ -442,12 +544,12 @@ function createToolInstance({ res, toolName, serverName, toolDefinition, provide
       }
 
       throw new Error(
-        `[MCP][${serverName}][${toolName}] tool call failed${error?.message ? `: ${error?.message}` : '.'}`,
+        `[MCP][${serverName}][${toolName}] tool call failed${error?.message ? `: ${error?.message}` : "."}`,
       );
     } finally {
       // Clean up abort handler to prevent memory leaks
       if (abortHandler && derivedSignal) {
-        derivedSignal.removeEventListener('abort', abortHandler);
+        derivedSignal.removeEventListener("abort", abortHandler);
       }
     }
   };
@@ -455,7 +557,7 @@ function createToolInstance({ res, toolName, serverName, toolDefinition, provide
   const toolInstance = tool(_call, {
     schema,
     name: normalizedToolKey,
-    description: description || '',
+    description: description || "",
     responseFormat: AgentConstants.CONTENT_AND_ARTIFACT,
   });
   toolInstance.mcp = true;
@@ -473,7 +575,7 @@ async function getMCPSetupData(userId) {
   const mcpConfig = config?.mcpConfig;
 
   if (!mcpConfig) {
-    throw new Error('MCP config not found');
+    throw new Error("MCP config not found");
   }
 
   const mcpManager = getMCPManager(userId);
@@ -482,7 +584,10 @@ async function getMCPSetupData(userId) {
   try {
     appConnections = (await mcpManager.appConnections?.getAll()) || new Map();
   } catch (error) {
-    logger.error(`[MCP][User: ${userId}] Error getting app connections:`, error);
+    logger.error(
+      `[MCP][User: ${userId}] Error getting app connections:`,
+      error,
+    );
   }
   const userConnections = mcpManager.getUserConnections(userId) || new Map();
   const oauthServers = await mcpServersRegistry.getOAuthServers();
@@ -507,7 +612,7 @@ async function checkOAuthFlowStatus(userId, serverName) {
   const flowId = MCPOAuthHandler.generateFlowId(userId, serverName);
 
   try {
-    const flowState = await flowManager.getFlowState(flowId, 'mcp_oauth');
+    const flowState = await flowManager.getFlowState(flowId, "mcp_oauth");
     if (!flowState) {
       return { hasActiveFlow: false, hasFailedFlow: false };
     }
@@ -515,41 +620,54 @@ async function checkOAuthFlowStatus(userId, serverName) {
     const flowAge = Date.now() - flowState.createdAt;
     const flowTTL = flowState.ttl || 180000; // Default 3 minutes
 
-    if (flowState.status === 'FAILED' || flowAge > flowTTL) {
-      const wasCancelled = flowState.error && flowState.error.includes('cancelled');
+    if (flowState.status === "FAILED" || flowAge > flowTTL) {
+      const wasCancelled =
+        flowState.error && flowState.error.includes("cancelled");
 
       if (wasCancelled) {
-        logger.debug(`[MCP Connection Status] Found cancelled OAuth flow for ${serverName}`, {
-          flowId,
-          status: flowState.status,
-          error: flowState.error,
-        });
+        logger.debug(
+          `[MCP Connection Status] Found cancelled OAuth flow for ${serverName}`,
+          {
+            flowId,
+            status: flowState.status,
+            error: flowState.error,
+          },
+        );
         return { hasActiveFlow: false, hasFailedFlow: false };
       } else {
-        logger.debug(`[MCP Connection Status] Found failed OAuth flow for ${serverName}`, {
-          flowId,
-          status: flowState.status,
-          flowAge,
-          flowTTL,
-          timedOut: flowAge > flowTTL,
-          error: flowState.error,
-        });
+        logger.debug(
+          `[MCP Connection Status] Found failed OAuth flow for ${serverName}`,
+          {
+            flowId,
+            status: flowState.status,
+            flowAge,
+            flowTTL,
+            timedOut: flowAge > flowTTL,
+            error: flowState.error,
+          },
+        );
         return { hasActiveFlow: false, hasFailedFlow: true };
       }
     }
 
-    if (flowState.status === 'PENDING') {
-      logger.debug(`[MCP Connection Status] Found active OAuth flow for ${serverName}`, {
-        flowId,
-        flowAge,
-        flowTTL,
-      });
+    if (flowState.status === "PENDING") {
+      logger.debug(
+        `[MCP Connection Status] Found active OAuth flow for ${serverName}`,
+        {
+          flowId,
+          flowAge,
+          flowTTL,
+        },
+      );
       return { hasActiveFlow: true, hasFailedFlow: false };
     }
 
     return { hasActiveFlow: false, hasFailedFlow: false };
   } catch (error) {
-    logger.error(`[MCP Connection Status] Error checking OAuth flows for ${serverName}:`, error);
+    logger.error(
+      `[MCP Connection Status] Error checking OAuth flows for ${serverName}:`,
+      error,
+    );
     return { hasActiveFlow: false, hasFailedFlow: false };
   }
 }
@@ -573,24 +691,27 @@ async function getServerConnectionStatus(
   const getConnectionState = () =>
     appConnections.get(serverName)?.connectionState ??
     userConnections.get(serverName)?.connectionState ??
-    'disconnected';
+    "disconnected";
 
   const baseConnectionState = getConnectionState();
   let finalConnectionState = baseConnectionState;
 
   // connection state overrides specific to OAuth servers
-  if (baseConnectionState === 'disconnected' && oauthServers.has(serverName)) {
+  if (baseConnectionState === "disconnected" && oauthServers.has(serverName)) {
     // check if server is actively being reconnected
     const oauthReconnectionManager = getOAuthReconnectionManager();
     if (oauthReconnectionManager.isReconnecting(userId, serverName)) {
-      finalConnectionState = 'connecting';
+      finalConnectionState = "connecting";
     } else {
-      const { hasActiveFlow, hasFailedFlow } = await checkOAuthFlowStatus(userId, serverName);
+      const { hasActiveFlow, hasFailedFlow } = await checkOAuthFlowStatus(
+        userId,
+        serverName,
+      );
 
       if (hasFailedFlow) {
-        finalConnectionState = 'error';
+        finalConnectionState = "error";
       } else if (hasActiveFlow) {
-        finalConnectionState = 'connecting';
+        finalConnectionState = "connecting";
       }
     }
   }

@@ -142,7 +142,7 @@ function StyledCodeHighlighter({
 }
 
 /**
- * Dat-Server 思维链内容组件 - 显示推理过程
+ * becauseai-server 思维链内容组件 - 显示推理过程
  * 插入到原有的样式体系中
  */
 function DatServerThoughtChainContent({ data }: { data: ThoughtChainData }) {
@@ -328,7 +328,7 @@ function ToolCallDetailContent({
         </div>
       )}
 
-      {/* dat-server 思维链内容 - 新增 */}
+      {/* becauseai-server 思维链内容 - 新增 */}
       {thoughtChain && <DatServerThoughtChainContent data={thoughtChain} />}
     </div>
   );

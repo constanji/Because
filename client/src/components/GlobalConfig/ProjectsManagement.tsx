@@ -28,6 +28,24 @@ import McpServersConfig from './components/McpServersConfig';
 
 const DAT_API_BASE = import.meta.env.VITE_DAT_OPENAPI_BASE_URL || 'http://localhost:8080';
 
+// 将后端返回的驼峰命名字段转换为前端使用的下划线命名
+// 后端可能返回 embeddingStore，但前端期望 embedding_store
+const normalizeProject = (project: any): DatProject => {
+    return {
+        ...project,
+        // 处理 embeddingStore -> embedding_store
+        embedding_store: project.embedding_store || project.embeddingStore,
+        // 处理 contentStore -> content_store
+        content_store: project.content_store || project.contentStore,
+        // 处理 semanticModels -> semantic_models (在 agents 中)
+        agents: project.agents?.map((agent: any) => ({
+            ...agent,
+            semantic_models: agent.semantic_models || agent.semanticModels || [],
+            semantic_model_tags: agent.semantic_model_tags || agent.semanticModelTags || [],
+        })) || [],
+    };
+};
+
 // 类型定义
 interface LlmConfig {
     name: string;
@@ -87,52 +105,63 @@ interface DocItem {
 type ContentTabType = 'sql-pairs' | 'synonyms' | 'docs';
 
 // 默认项目数据
-const getDefaultProject = (): Omit<DatProject, '_id' | 'createdAt' | 'updatedAt'> => ({
+const getDefaultProject = (): Omit<
+    DatProject,
+    "_id" | "createdAt" | "updatedAt"
+> => ({
     version: 1,
-    name: '',
-    description: '',
+    name: "",
+    description: "",
     configuration: {},
     llms: [
         {
-            name: 'default',
-            provider: 'openai',
+            name: "default",
+            provider: "openai",
             configuration: {
-                'base-url': 'https://api.openai.com/v1',
-                'model-name': '',
-                'api-key': '',
+                "base-url": "https://api.openai.com/v1",
+                "model-name": "",
+                "api-key": "",
             },
         },
     ],
     agents: [
         {
-            name: 'default',
-            description: '',
-            provider: 'default',
+            name: "default",
+            description: "",
+            provider: "default",
             configuration: {
-                'default-llm': 'default',
-                language: 'Simplified Chinese',
+                "default-llm": "default",
+                language: "Simplified Chinese",
             },
             semantic_models: [],
             semantic_model_tags: [],
         },
     ],
     embedding: {
-        provider: 'bge-small-zh-v15-q',
+        provider: "bge-small-zh-v15-q",
         configuration: {},
     },
     embedding_store: {
-        provider: 'duckdb',
-        configuration: {},
+        provider: "pgvector",
+        configuration: {
+            host: "pgvector",
+            port: 5432,
+            user: "dat",
+            password: "dat123",
+            database: "dat_embeddings",
+            dimension: 512,
+            "table-prefix": "dat_embeddings",
+        },
     },
     content_store: {
-        provider: 'default',
+        provider: "default",
         configuration: {
-            'max-results': 5,
-            'min-score': 0.6,
+            "max-results": 5,
+            "min-score": 0.6,
         },
     },
     reranking: {
-        provider: 'ms-marco-MiniLM-L6-v2-q',
+        provider: "ms-marco-MiniLM-L6-v2-q",
         configuration: {},
     },
 });
@@ -208,7 +237,9 @@ export default function ProjectsManagement() {
             }
 
             const data = await response.json();
-            setProjects(data.projects || []);
+            // 对每个项目进行字段名规范化，处理驼峰命名到下划线命名的转换
+            const normalizedProjects = (data.projects || []).map(normalizeProject);
+            setProjects(normalizedProjects);
         } catch (error) {
             console.error('Error fetching projects:', error);
             showToast({

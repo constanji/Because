@@ -11,6 +11,7 @@ import {
   parseCompactConvo,
   replaceSpecialVars,
   isAssistantsEndpoint,
+  LocalStorageKeys,
 } from '@because/data-provider';
 import { useSetRecoilState, useResetRecoilState, useRecoilValue } from 'recoil';
 import type {
@@ -192,6 +193,18 @@ export default function useChatFunctions({
       endpointOption.modelDisplayLabel = modelDisplayLabel;
     } else {
       endpointOption.key = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      // 从 localStorage 获取选中的数据源 ID 并传递给后端
+      const savedDatasourceId = localStorage.getItem(LocalStorageKeys.LAST_DATA_SOURCE_ID);
+      if (savedDatasourceId) {
+        try {
+          const datasourceId = JSON.parse(savedDatasourceId);
+          if (datasourceId) {
+            (endpointOption as TEndpointOption & { datasourceId?: string }).datasourceId = datasourceId;
+          }
+        } catch (e) {
+          // 忽略 JSON 解析错误
+        }
+      }
     }
     const responseSender = getSender({ model: conversation?.model, ...endpointOption });
 

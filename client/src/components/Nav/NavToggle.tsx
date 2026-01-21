@@ -1,55 +1,61 @@
-import { TooltipAnchor } from '@because/client';
-import { useLocalize } from '~/hooks';
-import { cn } from '~/utils';
+import { TooltipAnchor } from "@because/client";
+import { useLocalize } from "~/hooks";
+import { cn } from "~/utils";
 
 export default function NavToggle({
   onToggle,
   navVisible,
   isHovering,
   setIsHovering,
-  side = 'left',
-  className = '',
+  side = "left",
+  className = "",
   translateX = true,
 }: {
   onToggle: () => void;
   navVisible: boolean;
   isHovering: boolean;
   setIsHovering: (isHovering: boolean) => void;
-  side?: 'left' | 'right';
+  side?: "left" | "right";
   className?: string;
   translateX?: boolean;
 }) {
   const localize = useLocalize();
   const transition = {
-    transition: 'transform 0.3s ease, opacity 0.2s ease',
+    transition: "transform 0.3s ease, opacity 0.2s ease",
   };
 
   const rotationDegree = 15;
-  const rotation = isHovering || !navVisible ? `${rotationDegree}deg` : '0deg';
-  const topBarRotation = side === 'right' ? `-${rotation}` : rotation;
-  const bottomBarRotation = side === 'right' ? rotation : `-${rotation}`;
+  const rotation = isHovering || !navVisible ? `${rotationDegree}deg` : "0deg";
+  const topBarRotation = side === "right" ? `-${rotation}` : rotation;
+  const bottomBarRotation = side === "right" ? rotation : `-${rotation}`;
 
   return (
     <div
       className={cn(
         className,
-        '-translate-y-1/2 transition-transform',
-        navVisible ? 'rotate-0' : 'rotate-180',
-        navVisible && translateX ? 'translate-x-[260px]' : 'translate-x-0',
+        "-translate-y-1/2 transition-transform",
+        navVisible ? "rotate-0" : "rotate-180",
+        navVisible && translateX ? "translate-x-[260px]" : "translate-x-0",
       )}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
       <TooltipAnchor
-        side={side === 'right' ? 'left' : 'right'}
-        aria-label={side === 'left' ? localize('com_ui_chat_history') : localize('com_ui_controls')}
+        side={side === "right" ? "left" : "right"}
+        aria-label={
+          side === "left"
+            ? localize("com_ui_chat_history")
+            : localize("com_ui_controls")
+        }
         aria-expanded={navVisible}
-        aria-controls={side === 'left' ? 'chat-history-nav' : 'controls-nav'}
+        aria-controls={side === "left" ? "chat-history-nav" : "controls-nav"}
         id={`toggle-${side}-nav`}
         onClick={onToggle}
         role="button"
         description={
-          navVisible ? localize('com_nav_close_sidebar') : localize('com_nav_open_sidebar')
+          navVisible
+            ? localize("com_nav_close_sidebar")
+            : localize("com_nav_open_sidebar")
         }
         className="flex items-center justify-center"
         tabIndex={0}

@@ -588,9 +588,9 @@ export default function DatasourceManagement() {
           prev.map((ds) =>
             ds._id === boundDatasource._id
               ? {
-                  ...ds,
-                  agentNames: ds.agentNames.filter((n) => n !== agentName),
-                }
+                ...ds,
+                agentNames: ds.agentNames.filter((n) => n !== agentName),
+              }
               : ds,
           ),
         );
@@ -833,7 +833,7 @@ export default function DatasourceManagement() {
                     >
                       <div className="flex flex-wrap gap-1">
                         {editingDatasource.agentNames &&
-                        editingDatasource.agentNames.length > 0 ? (
+                          editingDatasource.agentNames.length > 0 ? (
                           editingDatasource.agentNames.map((name) => (
                             <span
                               key={name}
@@ -864,7 +864,7 @@ export default function DatasourceManagement() {
                                 className={cn(
                                   "flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700",
                                   isSelected &&
-                                    "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+                                  "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
                                 )}
                                 onClick={() => toggleAgentSelection(agent.name)}
                               >

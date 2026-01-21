@@ -217,7 +217,7 @@ class AgentClient extends BaseClient {
    * `AgentClient` is not opinionated about vision requests, so we don't do anything here
    * @param {MongoFile[]} attachments
    */
-  checkVisionRequest() {}
+  checkVisionRequest() { }
 
   getSaveOptions() {
     // TODO:
@@ -661,7 +661,7 @@ class AgentClient extends BaseClient {
       const bufferString = getBufferString(filteredMessages);
       const bufferMessage = new HumanMessage(`# Current Chat:\n\n${bufferString}`);
       const memoryResult = await this.processMemory([bufferMessage]);
-      
+
       return memoryResult;
     } catch (error) {
       logger.error('Memory Agent failed to process memory', error);
@@ -855,6 +855,7 @@ class AgentClient extends BaseClient {
             messageId: this.responseMessageId,
             conversationId: this.conversationId,
             parentMessageId: this.parentMessageId,
+            datasourceId: this.options.req.body?.datasourceId,
           },
           user: createSafeUser(this.options.req.user),
         },
@@ -865,7 +866,7 @@ class AgentClient extends BaseClient {
       };
 
       const toolSet = new Set((this.options.agent.tools ?? []).map((tool) => tool && tool.name));
-      
+
       let { messages: initialMessages, indexTokenCountMap } = formatAgentMessages(
         payload,
         this.indexTokenCountMap,
@@ -948,7 +949,7 @@ class AgentClient extends BaseClient {
 
         /** @deprecated Agent Chain */
         config.configurable.last_agent_id = agents[agents.length - 1].id;
-        
+
         await run.processStream({ messages }, config, {
           callbacks: {
             [Callback.TOOL_ERROR]: logToolError,
