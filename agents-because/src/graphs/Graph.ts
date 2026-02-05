@@ -71,17 +71,17 @@ export abstract class Graph<
 > {
   abstract resetValues(): void;
   abstract initializeTools({
-    currentTools,
-    currentToolMap,
-  }: {
+                             currentTools,
+                             currentToolMap,
+                           }: {
     currentTools?: t.GraphTools;
     currentToolMap?: t.ToolMap;
   }): CustomToolNode<T> | ToolNode<T>;
   abstract initializeModel({
-    currentModel,
-    tools,
-    clientOptions,
-  }: {
+                             currentModel,
+                             tools,
+                             clientOptions,
+                           }: {
     currentModel?: t.ChatModel;
     tools?: t.GraphTools;
     clientOptions?: t.ClientOptions;
@@ -131,6 +131,8 @@ export abstract class Graph<
   stepKeyIds: Map<string, string[]> = new Map<string, string[]>();
   contentIndexMap: Map<string, number> = new Map();
   toolCallStepIds: Map<string, string> = new Map();
+  /** Map of tool call index -> {name, id} for recovering missing info in streaming (dashscope issue) */
+  toolCallInfoByIndex: Map<number, { name: string; id: string }> = new Map();
   signal?: AbortSignal;
   /** Set of invoked tool call IDs from non-message run steps completed mid-run, if any */
   invokedToolIds?: Set<string>;
@@ -151,13 +153,13 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
   defaultAgentId: string;
 
   constructor({
-    // parent-level graph inputs
-    runId,
-    signal,
-    agents,
-    tokenCounter,
-    indexTokenCountMap,
-  }: t.StandardGraphInput) {
+                // parent-level graph inputs
+                runId,
+                signal,
+                agents,
+                tokenCounter,
+                indexTokenCountMap,
+              }: t.StandardGraphInput) {
     super();
     this.runId = runId;
     this.signal = signal;
@@ -190,6 +192,7 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
     }
     this.stepKeyIds = resetIfNotEmpty(this.stepKeyIds, new Map());
     this.toolCallStepIds = resetIfNotEmpty(this.toolCallStepIds, new Map());
+    this.toolCallInfoByIndex = resetIfNotEmpty(this.toolCallInfoByIndex, new Map());
     this.messageIdsByStepKey = resetIfNotEmpty(
       this.messageIdsByStepKey,
       new Map()
@@ -393,11 +396,11 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
   /* Graph */
 
   createSystemRunnable({
-    provider,
-    clientOptions,
-    instructions,
-    additional_instructions,
-  }: {
+                         provider,
+                         clientOptions,
+                         instructions,
+                         additional_instructions,
+                       }: {
     provider?: Providers;
     clientOptions?: t.ClientOptions;
     instructions?: string;
@@ -417,9 +420,9 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
       finalInstructions &&
       provider === Providers.ANTHROPIC &&
       ((
-        (clientOptions as t.AnthropicClientOptions).clientOptions
-          ?.defaultHeaders as Record<string, string> | undefined
-      )?.['anthropic-beta']?.includes('prompt-caching') ??
+          (clientOptions as t.AnthropicClientOptions).clientOptions
+            ?.defaultHeaders as Record<string, string> | undefined
+        )?.['anthropic-beta']?.includes('prompt-caching') ??
         false)
     ) {
       finalInstructions = {
@@ -442,10 +445,10 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
   }
 
   initializeTools({
-    currentTools,
-    currentToolMap,
-    agentContext,
-  }: {
+                    currentTools,
+                    currentToolMap,
+                    agentContext,
+                  }: {
     currentTools?: t.GraphTools;
     currentToolMap?: t.ToolMap;
     agentContext?: AgentContext;
@@ -454,6 +457,7 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
       tools: (currentTools as t.GenericTool[] | undefined) ?? [],
       toolMap: currentToolMap,
       toolCallStepIds: this.toolCallStepIds,
+      toolCallInfoByIndex: this.toolCallInfoByIndex,
       errorHandler: (data, metadata) =>
         StandardGraph.handleToolCallErrorStatic(this, data, metadata),
       toolRegistry: agentContext?.toolRegistry,
@@ -461,10 +465,10 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
   }
 
   initializeModel({
-    provider,
-    tools,
-    clientOptions,
-  }: {
+                    provider,
+                    tools,
+                    clientOptions,
+                  }: {
     provider: Providers;
     tools?: t.GraphTools;
     clientOptions?: t.ClientOptions;
@@ -522,9 +526,9 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
   }
 
   getNewModel({
-    provider,
-    clientOptions,
-  }: {
+                provider,
+                clientOptions,
+              }: {
     provider: Providers;
     clientOptions?: t.ClientOptions;
   }): t.ChatModelInstance {
@@ -663,7 +667,7 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
         const isAnthropicWithThinking =
           (agentContext.provider === Providers.ANTHROPIC &&
             (agentContext.clientOptions as t.AnthropicClientOptions).thinking !=
-              null) ||
+            null) ||
           (agentContext.provider === Providers.BEDROCK &&
             (agentContext.clientOptions as t.BedrockAnthropicInput)
               .additionalModelRequestFields?.['thinking'] != null) ||
@@ -725,7 +729,7 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
       } else if (
         isLatestToolMessage &&
         ((isOpenAILike(agentContext.provider) &&
-          agentContext.provider !== Providers.DEEPSEEK) ||
+            agentContext.provider !== Providers.DEEPSEEK) ||
           isGoogleLike(agentContext.provider))
       ) {
         formatArtifactPayload(finalMessages);
@@ -762,7 +766,7 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
       const isAnthropicWithThinking =
         (agentContext.provider === Providers.ANTHROPIC &&
           (agentContext.clientOptions as t.AnthropicClientOptions).thinking !=
-            null) ||
+          null) ||
         (agentContext.provider === Providers.BEDROCK &&
           (agentContext.clientOptions as t.BedrockAnthropicInput)
             .additionalModelRequestFields?.['thinking'] != null);
