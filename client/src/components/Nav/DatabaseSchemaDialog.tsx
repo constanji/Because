@@ -59,12 +59,14 @@ interface DatabaseSchemaDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   datasource: DatDatasource | null;
+  initialSearchQuery?: string;
 }
 
 export default function DatabaseSchemaDialog({
   isOpen,
   onOpenChange,
   datasource,
+  initialSearchQuery = "",
 }: DatabaseSchemaDialogProps) {
   const { showToast } = useToastContext();
   const [schemas, setSchemas] = useState<LightSchema[]>([]);
@@ -74,22 +76,44 @@ export default function DatabaseSchemaDialog({
 
   useEffect(() => {
     if (isOpen && datasource) {
-      loadSchema();
+      loadSchema(false);
+      if (initialSearchQuery) {
+        setSearchQuery(initialSearchQuery);
+        setSelectedTable(initialSearchQuery);
+      }
     } else {
       // 关闭对话框时重置状态
       setSchemas([]);
       setSelectedTable(null);
       setSearchQuery("");
     }
-  }, [isOpen, datasource]);
+  }, [isOpen, datasource, initialSearchQuery]);
 
-  const loadSchema = async () => {
+  const loadSchema = async (forceRefresh = false) => {
     if (!datasource?._id || !datasource?.projectId) {
       showToast({
         message: "数据源信息不完整",
         status: "error",
       });
       return;
+    }
+
+    const cacheKey = `DAT_LIGHT_SCHEMA_${datasource._id}`;
+
+    // 如果不是强制刷新，且存在缓存数据，优先使用缓存
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsedCache = JSON.parse(cached);
+          if (Array.isArray(parsedCache) && parsedCache.length > 0) {
+            setSchemas(parsedCache);
+            return;
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
     }
 
     try {
@@ -105,9 +129,15 @@ export default function DatabaseSchemaDialog({
       const data = await response.json();
       setSchemas(data || []);
 
-      if (data && data.length > 0) {
+      // 写入缓存
+      if (data && Array.isArray(data)) {
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      }
+
+      // 如果数据有更新或者是强制刷新，显示成功提示
+      if (data && data.length > 0 && forceRefresh) {
         showToast({
-          message: `成功加载 ${data.length} 张表结构`,
+          message: `成功刷新 ${data.length} 张表结果`,
           status: "success",
         });
       }
@@ -162,7 +192,7 @@ export default function DatabaseSchemaDialog({
             </div>
             <div className="flex items-center gap-2">
               <Button
-                onClick={loadSchema}
+                onClick={() => loadSchema(true)}
                 disabled={loadingSchema}
                 variant="ghost"
                 className="btn btn-neutral border-token-border-light relative flex items-center gap-2 rounded-lg px-3 py-2"
@@ -202,7 +232,7 @@ export default function DatabaseSchemaDialog({
                   请在数据源管理中生成 Light Schema
                 </p>
                 <Button
-                  onClick={loadSchema}
+                  onClick={() => loadSchema(true)}
                   disabled={loadingSchema}
                   className="btn btn-primary relative flex items-center gap-2 rounded-lg px-4 py-2"
                 >

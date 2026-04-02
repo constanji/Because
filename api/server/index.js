@@ -141,11 +141,13 @@ const startServer = async () => {
   app.use('/api/banner', routes.banner);
   app.use('/api/memories', routes.memories);
   app.use('/api/permissions', routes.accessPermissions);
+  app.use('/api/optimize', routes.optimize);
 
   app.use('/api/tags', routes.tags);
   app.use('/api/mcp', routes.mcp);
   app.use('/api/dat-projects', routes.datProjects);
   app.use('/api/dat-datasources', routes.datDatasources);
+  app.use('/api/datasource-prompts', routes.datasourcePrompts);
 
   app.use(ErrorController);
 

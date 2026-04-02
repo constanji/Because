@@ -16,6 +16,8 @@ import CodeAnalyze from './CodeAnalyze';
 import Container from './Container';
 import WebSearch from './WebSearch';
 import ToolCall from './ToolCall';
+import G2Chart from './G2Chart';
+import ReportPreview from './ReportPreview';
 import ImageGen from './ImageGen';
 import Image from './Image';
 
@@ -101,49 +103,91 @@ const Part = memo(
           <ExecuteCode
             attachments={attachments}
             isSubmitting={isSubmitting}
-            output={toolCall.output ?? ''}
+            output={toolCall.output ?? ""}
             initialProgress={toolCall.progress ?? 0.1}
-            args={typeof toolCall.args === 'string' ? toolCall.args : ''}
+            args={typeof toolCall.args === "string" ? toolCall.args : ""}
           />
         );
       } else if (
         isToolCall &&
-        (toolCall.name === 'image_gen_oai' || toolCall.name === 'image_edit_oai')
+        (toolCall.name === "image_gen_oai" ||
+          toolCall.name === "image_edit_oai")
       ) {
         return (
           <OpenAIImageGen
             initialProgress={toolCall.progress ?? 0.1}
             isSubmitting={isSubmitting}
             toolName={toolCall.name}
-            args={typeof toolCall.args === 'string' ? toolCall.args : ''}
-            output={toolCall.output ?? ''}
+            args={typeof toolCall.args === "string" ? toolCall.args : ""}
+            output={toolCall.output ?? ""}
             attachments={attachments}
           />
         );
       } else if (isToolCall && toolCall.name === Tools.web_search) {
         return (
           <WebSearch
-            output={toolCall.output ?? ''}
+            output={toolCall.output ?? ""}
             initialProgress={toolCall.progress ?? 0.1}
             isSubmitting={isSubmitting}
             attachments={attachments}
             isLast={isLast}
           />
         );
-      } else if (isToolCall && toolCall.name?.startsWith(Constants.LC_TRANSFER_TO_)) {
+      } else if (
+        isToolCall &&
+        toolCall.name?.startsWith(Constants.LC_TRANSFER_TO_)
+      ) {
         return (
           <AgentHandoff
-            args={toolCall.args ?? ''}
-            name={toolCall.name || ''}
-            output={toolCall.output ?? ''}
+            args={toolCall.args ?? ""}
+            name={toolCall.name || ""}
+            output={toolCall.output ?? ""}
           />
         );
+      } else if (isToolCall && toolCall.name === "chart_generator") {
+        return (
+          <G2Chart output={toolCall.output ?? ""} isSubmitting={isSubmitting} />
+        );
+      } else if (isToolCall && toolCall.name === "report_generator") {
+        const raw = toolCall.output ?? "";
+        // 提取 ```report ... ``` 代码块中的内容
+        const match = raw.match(/```report\n([\s\S]*?)\n```/);
+        const reportContent = match ? match[1] : raw;
+        if (!reportContent && isSubmitting) {
+          return (
+            <div className="my-3 flex items-center gap-2 text-sm text-text-secondary">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-border-light border-t-text-primary" />
+              <span>正在生成报告...</span>
+            </div>
+          );
+        }
+        return reportContent ? <ReportPreview content={reportContent} /> : null;
+      } else if (isToolCall && toolCall.name?.includes("ask_data")) {
+        if (isSubmitting && (!toolCall.output || toolCall.output === "")) {
+          return (
+            <div className="my-3 flex items-center gap-2 text-sm text-text-secondary">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-border-light border-t-text-primary" />
+              <span>正在查询数据...</span>
+            </div>
+          );
+        }
+        return null;
+      } else if (isToolCall && toolCall.name?.includes("attribution_analysis")) {
+        if (isSubmitting && (!toolCall.output || toolCall.output === "")) {
+          return (
+            <div className="my-3 flex items-center gap-2 text-sm text-text-secondary">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-border-light border-t-text-primary" />
+              <span>正在归因分析...</span>
+            </div>
+          );
+        }
+        return null;
       } else if (isToolCall) {
         return (
           <ToolCall
-            args={toolCall.args ?? ''}
-            name={toolCall.name || ''}
-            output={toolCall.output ?? ''}
+            args={toolCall.args ?? ""}
+            name={toolCall.name || ""}
+            output={toolCall.output ?? ""}
             initialProgress={toolCall.progress ?? 0.1}
             isSubmitting={isSubmitting}
             attachments={attachments}
@@ -166,7 +210,10 @@ const Part = memo(
         toolCall.type === ToolCallTypes.FILE_SEARCH
       ) {
         return (
-          <RetrievalCall initialProgress={toolCall.progress ?? 0.1} isSubmitting={isSubmitting} />
+          <RetrievalCall
+            initialProgress={toolCall.progress ?? 0.1}
+            isSubmitting={isSubmitting}
+          />
         );
       } else if (
         toolCall.type === ToolCallTypes.FUNCTION &&
@@ -179,12 +226,19 @@ const Part = memo(
             args={toolCall.function.arguments as string}
           />
         );
-      } else if (toolCall.type === ToolCallTypes.FUNCTION && ToolCallTypes.FUNCTION in toolCall) {
+      } else if (
+        toolCall.type === ToolCallTypes.FUNCTION &&
+        ToolCallTypes.FUNCTION in toolCall
+      ) {
         if (isImageVisionTool(toolCall)) {
           if (isSubmitting && showCursor) {
             return (
               <Container>
-                <Text text={''} isCreatedByUser={isCreatedByUser} showCursor={showCursor} />
+                <Text
+                  text={""}
+                  isCreatedByUser={isCreatedByUser}
+                  showCursor={showCursor}
+                />
               </Container>
             );
           }

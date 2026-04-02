@@ -46,6 +46,11 @@ const banResponse = async (req, res) => {
  */
 const checkBan = async (req, res, next = () => {}) => {
   try {
+    // Skip ban check for OpenClaw service requests (trusted service account)
+    if (req.isOpenclawRequest) {
+      return next();
+    }
+
     const { BAN_VIOLATIONS } = process.env ?? {};
 
     if (!isEnabled(BAN_VIOLATIONS)) {

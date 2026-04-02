@@ -3,6 +3,7 @@ import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@because/client';
 import { PermissionTypes, Permissions, apiBaseUrl } from '@because/data-provider';
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
+import ReportPreview from "~/components/Chat/Messages/Content/ReportPreview";
 import useHasAccess from '~/hooks/Roles/useHasAccess';
 import { useFileDownload } from '~/data-provider';
 import { useCodeBlockContext } from '~/Providers';
@@ -16,59 +17,94 @@ type TCodeProps = {
   children: React.ReactNode;
 };
 
-export const code: React.ElementType = memo(({ className, children }: TCodeProps) => {
-  const canRunCode = useHasAccess({
-    permissionType: PermissionTypes.RUN_CODE,
-    permission: Permissions.USE,
-  });
-  const match = /language-(\w+)/.exec(className ?? '');
-  const lang = match && match[1];
-  const isMath = lang === 'math';
-  const isSingleLine = typeof children === 'string' && children.split('\n').length === 1;
+export const code: React.ElementType = memo(
+  ({ className, children }: TCodeProps) => {
+    const canRunCode = useHasAccess({
+      permissionType: PermissionTypes.RUN_CODE,
+      permission: Permissions.USE,
+    });
+    const match = /language-(\w+)/.exec(className ?? "");
+    const lang = match && match[1];
+    const isMath = lang === "math";
+    const isReport = lang === "report";
+    const isSingleLine =
+      typeof children === "string" && children.split("\n").length === 1;
 
-  const { getNextIndex, resetCounter } = useCodeBlockContext();
-  const blockIndex = useRef(getNextIndex(isMath || isSingleLine)).current;
+    const { getNextIndex, resetCounter } = useCodeBlockContext();
+    const blockIndex = useRef(
+      getNextIndex(isMath || isSingleLine || isReport),
+    ).current;
 
-  useEffect(() => {
-    resetCounter();
-  }, [children, resetCounter]);
+    useEffect(() => {
+      resetCounter();
+    }, [children, resetCounter]);
 
-  if (isMath) {
-    return <>{children}</>;
-  } else if (isSingleLine) {
-    return (
-      <code onDoubleClick={handleDoubleClick} className={className}>
-        {children}
-      </code>
-    );
-  } else {
-    return (
-      <CodeBlock
-        lang={lang ?? 'text'}
-        codeChildren={children}
-        blockIndex={blockIndex}
-        allowExecution={canRunCode}
-      />
-    );
-  }
-});
+    if (isMath) {
+      return <>{children}</>;
+    } else if (isReport) {
+      // 使用 ReportPreview 组件渲染 report 代码块
+      const content =
+        typeof children === "string"
+          ? children
+          : Array.isArray(children)
+            ? children.join("")
+            : String(children);
+      return <ReportPreview content={content} />;
+    } else if (isSingleLine) {
+      return (
+        <code onDoubleClick={handleDoubleClick} className={className}>
+          {children}
+        </code>
+      );
+    } else {
+      return (
+        <CodeBlock
+          lang={lang ?? "text"}
+          codeChildren={children}
+          blockIndex={blockIndex}
+          allowExecution={canRunCode}
+        />
+      );
+    }
+  },
+);
 
-export const codeNoExecution: React.ElementType = memo(({ className, children }: TCodeProps) => {
-  const match = /language-(\w+)/.exec(className ?? '');
-  const lang = match && match[1];
+export const codeNoExecution: React.ElementType = memo(
+  ({ className, children }: TCodeProps) => {
+    const match = /language-(\w+)/.exec(className ?? "");
+    const lang = match && match[1];
 
-  if (lang === 'math') {
-    return children;
-  } else if (typeof children === 'string' && children.split('\n').length === 1) {
-    return (
-      <code onDoubleClick={handleDoubleClick} className={className}>
-        {children}
-      </code>
-    );
-  } else {
-    return <CodeBlock lang={lang ?? 'text'} codeChildren={children} allowExecution={false} />;
-  }
-});
+    if (lang === "math") {
+      return children;
+    } else if (lang === "report") {
+      // 使用 ReportPreview 组件渲染 report 代码块
+      const content =
+        typeof children === "string"
+          ? children
+          : Array.isArray(children)
+            ? children.join("")
+            : String(children);
+      return <ReportPreview content={content} />;
+    } else if (
+      typeof children === "string" &&
+      children.split("\n").length === 1
+    ) {
+      return (
+        <code onDoubleClick={handleDoubleClick} className={className}>
+          {children}
+        </code>
+      );
+    } else {
+      return (
+        <CodeBlock
+          lang={lang ?? "text"}
+          codeChildren={children}
+          allowExecution={false}
+        />
+      );
+    }
+  },
+);
 
 type TAnchorProps = {
   href: string;
@@ -81,24 +117,26 @@ export const a: React.ElementType = memo(({ href, children }: TAnchorProps) => {
   const localize = useLocalize();
 
   const {
-    file_id = '',
-    filename = '',
+    file_id = "",
+    filename = "",
     filepath,
   } = useMemo(() => {
     const pattern = new RegExp(`(?:files|outputs)/${user?.id}/([^\\s]+)`);
     const match = href.match(pattern);
     if (match && match[0]) {
       const path = match[0];
-      const parts = path.split('/');
+      const parts = path.split("/");
       const name = parts.pop();
       const file_id = parts.pop();
       return { file_id, filename: name, filepath: path };
     }
-    return { file_id: '', filename: '', filepath: '' };
+    return { file_id: "", filename: "", filepath: "" };
   }, [user?.id, href]);
 
-  const { refetch: downloadFile } = useFileDownload(user?.id ?? '', file_id);
-  const props: { target?: string; onClick?: React.MouseEventHandler } = { target: '_new' };
+  const { refetch: downloadFile } = useFileDownload(user?.id ?? "", file_id);
+  const props: { target?: string; onClick?: React.MouseEventHandler } = {
+    target: "_new",
+  };
 
   if (!file_id || !filename) {
     return (
@@ -112,35 +150,35 @@ export const a: React.ElementType = memo(({ href, children }: TAnchorProps) => {
     event.preventDefault();
     try {
       const stream = await downloadFile();
-      if (stream.data == null || stream.data === '') {
-        console.error('Error downloading file: No data found');
+      if (stream.data == null || stream.data === "") {
+        console.error("Error downloading file: No data found");
         showToast({
-          status: 'error',
-          message: localize('com_ui_download_error'),
+          status: "error",
+          message: localize("com_ui_download_error"),
         });
         return;
       }
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = stream.data;
-      link.setAttribute('download', filename);
+      link.setAttribute("download", filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(stream.data);
     } catch (error) {
-      console.error('Error downloading file:', error);
+      console.error("Error downloading file:", error);
     }
   };
 
   props.onClick = handleDownload;
-  props.target = '_blank';
+  props.target = "_blank";
 
   const domainServerBaseUrl = `${apiBaseUrl()}/api`;
 
   return (
     <a
       href={
-        filepath?.startsWith('files/')
+        filepath?.startsWith("files/")
           ? `${domainServerBaseUrl}/${filepath}`
           : `${domainServerBaseUrl}/files/${filepath}`
       }
@@ -167,22 +205,36 @@ type TImageProps = {
   style?: React.CSSProperties;
 };
 
-export const img: React.ElementType = memo(({ src, alt, title, className, style }: TImageProps) => {
-  // Get the base URL from the API endpoints
-  const baseURL = apiBaseUrl();
+export const img: React.ElementType = memo(
+  ({ src, alt, title, className, style }: TImageProps) => {
+    // Get the base URL from the API endpoints
+    const baseURL = apiBaseUrl();
 
-  // If src starts with /images/, prepend the base URL
-  const fixedSrc = useMemo(() => {
-    if (!src) return src;
+    // If src starts with /images/, prepend the base URL
+    const fixedSrc = useMemo(() => {
+      if (!src) return src;
 
-    // If it's already an absolute URL or doesn't start with /images/, return as is
-    if (src.startsWith('http') || src.startsWith('data:') || !src.startsWith('/images/')) {
-      return src;
-    }
+      // If it's already an absolute URL or doesn't start with /images/, return as is
+      if (
+        src.startsWith("http") ||
+        src.startsWith("data:") ||
+        !src.startsWith("/images/")
+      ) {
+        return src;
+      }
 
-    // Prepend base URL to the image path
-    return `${baseURL}${src}`;
-  }, [src, baseURL]);
+      // Prepend base URL to the image path
+      return `${baseURL}${src}`;
+    }, [src, baseURL]);
 
-  return <img src={fixedSrc} alt={alt} title={title} className={className} style={style} />;
-});
+    return (
+      <img
+        src={fixedSrc}
+        alt={alt}
+        title={title}
+        className={className}
+        style={style}
+      />
+    );
+  },
+);

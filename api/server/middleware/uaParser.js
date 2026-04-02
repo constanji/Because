@@ -18,6 +18,11 @@ const { logViolation } = require('../../cache');
  * app.use(uaParser);
  */
 async function uaParser(req, res, next) {
+  // Skip UA check for OpenClaw service requests (machine-to-machine)
+  if (req.isOpenclawRequest) {
+    return next();
+  }
+
   const { NON_BROWSER_VIOLATION_SCORE: score = 20 } = process.env;
   const ua = uap(req.headers['user-agent']);
 

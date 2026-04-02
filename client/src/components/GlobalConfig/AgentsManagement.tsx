@@ -1,17 +1,28 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye, EyeOff, List, Grid } from 'lucide-react';
-import { Button, useToastContext } from '@because/client';
-import { SystemRoles, ResourceType, AccessRoleIds } from '@because/data-provider';
-import { useListAgentsQuery, useDeleteAgentMutation } from '~/data-provider';
-import { useUpdateResourcePermissionsMutation } from '@because/data-provider/react-query';
-import { dataService } from '@because/data-provider';
-import { useAuthContext, useLocalize, useAgentDefaultPermissionLevel } from '~/hooks';
-import { AgentPanelProvider, useAgentPanelContext } from '~/Providers/AgentPanelContext';
-import { AgentPanelSwitchWithContext } from '~/components/SidePanel/Agents/AgentPanelSwitch';
-import { cn } from '~/utils';
-import { getAgentAvatarUrl } from '~/utils/agents';
-import type { Agent } from '@because/data-provider';
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Edit, Trash2, Eye, EyeOff, List, Grid, Bot } from "lucide-react";
+import { Button, useToastContext } from "@because/client";
+import {
+  SystemRoles,
+  ResourceType,
+  AccessRoleIds,
+} from "@because/data-provider";
+import { useListAgentsQuery, useDeleteAgentMutation } from "~/data-provider";
+import { useUpdateResourcePermissionsMutation } from "@because/data-provider/react-query";
+import { dataService } from "@because/data-provider";
+import {
+  useAuthContext,
+  useLocalize,
+  useAgentDefaultPermissionLevel,
+} from "~/hooks";
+import {
+  AgentPanelProvider,
+  useAgentPanelContext,
+} from "~/Providers/AgentPanelContext";
+import { AgentPanelSwitchWithContext } from "~/components/SidePanel/Agents/AgentPanelSwitch";
+import { cn } from "~/utils";
+import { getAgentAvatarUrl } from "~/utils/agents";
+import type { Agent } from "@because/data-provider";
 
 // 包装组件，用于在编辑模式下设置agent_id
 function AgentPanelProviderWithAgentId({
@@ -76,8 +87,10 @@ export default function AgentsManagement() {
   const navigate = useNavigate();
   const permissionLevel = useAgentDefaultPermissionLevel();
   const [showBuilder, setShowBuilder] = useState(false);
-  const [editingAgentId, setEditingAgentId] = useState<string | undefined>(undefined);
-  const [viewMode, setViewMode] = useState<'detailed' | 'compact'>('detailed');
+  const [editingAgentId, setEditingAgentId] = useState<string | undefined>(
+    undefined,
+  );
+  const [viewMode, setViewMode] = useState<"detailed" | "compact">("detailed");
 
   // 获取所有智能体（管理员可以看到所有）
   const { data: agentsResponse, refetch } = useListAgentsQuery(
@@ -92,8 +105,8 @@ export default function AgentsManagement() {
   const deleteMutation = useDeleteAgentMutation({
     onSuccess: () => {
       showToast({
-        message: '智能体删除成功',
-        status: 'success',
+        message: "智能体删除成功",
+        status: "success",
       });
       refetch();
       if (editingAgentId) {
@@ -104,7 +117,7 @@ export default function AgentsManagement() {
     onError: (error) => {
       showToast({
         message: `删除失败: ${error.message}`,
-        status: 'error',
+        status: "error",
       });
     },
   });
@@ -113,7 +126,7 @@ export default function AgentsManagement() {
   const updatePermissionsMutation = useUpdateResourcePermissionsMutation();
 
   const handleDelete = (agentId: string) => {
-    if (confirm('确定要删除这个智能体吗？此操作无法撤销。')) {
+    if (confirm("确定要删除这个智能体吗？此操作无法撤销。")) {
       deleteMutation.mutate({ agent_id: agentId });
     }
   };
@@ -144,11 +157,11 @@ export default function AgentsManagement() {
       const fullAgent = await dataService.getExpandedAgentById({
         agent_id: agent.id,
       });
-      
+
       if (!fullAgent?._id) {
         showToast({
-          message: '无法获取智能体数据库ID',
-          status: 'error',
+          message: "无法获取智能体数据库ID",
+          status: "error",
         });
         return;
       }
@@ -160,19 +173,21 @@ export default function AgentsManagement() {
           updated: [],
           removed: [],
           public: !agent.isPublic,
-          publicAccessRoleId: !agent.isPublic ? AccessRoleIds.AGENT_VIEWER : undefined,
+          publicAccessRoleId: !agent.isPublic
+            ? AccessRoleIds.AGENT_VIEWER
+            : undefined,
         },
       });
 
       showToast({
-        message: agent.isPublic ? '已隐藏智能体' : '已展示智能体',
-        status: 'success',
+        message: agent.isPublic ? "已隐藏智能体" : "已展示智能体",
+        status: "success",
       });
       refetch();
     } catch (error) {
       showToast({
-        message: `操作失败: ${error instanceof Error ? error.message : '未知错误'}`,
-        status: 'error',
+        message: `操作失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        status: "error",
       });
     }
   };
@@ -184,7 +199,7 @@ export default function AgentsManagement() {
         <div className="flex h-full flex-col">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-text-primary dark:text-text-primary">
-              {editingAgentId ? '编辑智能体' : '创建新智能体'}
+              {editingAgentId ? "编辑智能体" : "创建新智能体"}
             </h3>
             <Button
               type="button"
@@ -209,7 +224,9 @@ export default function AgentsManagement() {
     <div className="flex h-full flex-col">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-text-primary">智能体列表</h3>
+          <h3 className="text-lg font-semibold text-text-primary">
+            智能体列表
+          </h3>
           <p className="mt-1 text-sm text-text-primary">
             管理所有智能体，设置是否展示给用户
           </p>
@@ -219,12 +236,12 @@ export default function AgentsManagement() {
           <div className="flex items-center gap-1 rounded-lg border border-border-light bg-surface-secondary p-1">
             <button
               type="button"
-              onClick={() => setViewMode('detailed')}
+              onClick={() => setViewMode("detailed")}
               className={cn(
-                'rounded px-2 py-1 text-sm transition-colors',
-                viewMode === 'detailed'
-                  ? 'bg-surface-primary text-text-primary'
-                  : 'text-text-secondary hover:bg-surface-hover',
+                "rounded px-2 py-1 text-sm transition-colors",
+                viewMode === "detailed"
+                  ? "bg-surface-primary text-text-primary"
+                  : "text-text-secondary hover:bg-surface-hover",
               )}
               title="详细视图"
               aria-label="详细视图"
@@ -233,12 +250,12 @@ export default function AgentsManagement() {
             </button>
             <button
               type="button"
-              onClick={() => setViewMode('compact')}
+              onClick={() => setViewMode("compact")}
               className={cn(
-                'rounded px-2 py-1 text-sm transition-colors',
-                viewMode === 'compact'
-                  ? 'bg-surface-primary text-text-primary'
-                  : 'text-text-secondary hover:bg-surface-hover',
+                "rounded px-2 py-1 text-sm transition-colors",
+                viewMode === "compact"
+                  ? "bg-surface-primary text-text-primary"
+                  : "text-text-secondary hover:bg-surface-hover",
               )}
               title="简略视图"
               aria-label="简略视图"
@@ -268,7 +285,13 @@ export default function AgentsManagement() {
             </div>
           </div>
         ) : (
-          <div className={cn(viewMode === 'compact' ? 'grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3' : 'space-y-2')}>
+          <div
+            className={cn(
+              viewMode === "compact"
+                ? "grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3"
+                : "space-y-2",
+            )}
+          >
             {agents.map((agent) => (
               <AgentListItem
                 key={agent.id}
@@ -289,17 +312,24 @@ export default function AgentsManagement() {
 
 interface AgentListItemProps {
   agent: Agent;
-  viewMode: 'detailed' | 'compact';
+  viewMode: "detailed" | "compact";
   onEdit: () => void;
   onDelete: () => void;
   onTogglePublic: () => void;
   isUpdating?: boolean;
 }
 
-function AgentListItem({ agent, viewMode, onEdit, onDelete, onTogglePublic, isUpdating }: AgentListItemProps) {
+function AgentListItem({
+  agent,
+  viewMode,
+  onEdit,
+  onDelete,
+  onTogglePublic,
+  isUpdating,
+}: AgentListItemProps) {
   const avatarUrl = getAgentAvatarUrl(agent);
-  
-  if (viewMode === 'compact') {
+
+  if (viewMode === "compact") {
     return (
       <div className="relative rounded-lg border border-border-light bg-surface-primary p-3 pr-10">
         <div className="flex items-start gap-3">
@@ -307,17 +337,19 @@ function AgentListItem({ agent, viewMode, onEdit, onDelete, onTogglePublic, isUp
             {avatarUrl ? (
               <img
                 src={avatarUrl}
-                alt={agent.name || '智能体'}
+                alt={agent.name || "智能体"}
                 className="h-12 w-12 rounded-full object-cover"
               />
             ) : (
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-secondary">
-                <span className="text-xl">🤖</span>
+                <Bot className="h-5 w-5 text-text-primary" />
               </div>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-semibold text-text-primary line-clamp-1">{agent.name}</h4>
+            <h4 className="text-sm font-semibold text-text-primary line-clamp-1">
+              {agent.name}
+            </h4>
             {agent.description && (
               <p className="mt-1 line-clamp-2 text-xs text-text-secondary">
                 {agent.description}
@@ -332,14 +364,18 @@ function AgentListItem({ agent, viewMode, onEdit, onDelete, onTogglePublic, isUp
             onClick={onTogglePublic}
             disabled={isUpdating}
             className={cn(
-              'rounded p-1.5 transition-colors',
+              "rounded p-1.5 transition-colors",
               agent.isPublic
-                ? 'text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
-                : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800',
-              isUpdating && 'opacity-50 cursor-not-allowed',
+                ? "text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
+                : "text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800",
+              isUpdating && "opacity-50 cursor-not-allowed",
             )}
-            title={agent.isPublic ? '已展示给用户（点击隐藏）' : '未展示给用户（点击显示）'}
-            aria-label={agent.isPublic ? '隐藏' : '显示'}
+            title={
+              agent.isPublic
+                ? "已展示给用户（点击隐藏）"
+                : "未展示给用户（点击显示）"
+            }
+            aria-label={agent.isPublic ? "隐藏" : "显示"}
           >
             {agent.isPublic ? (
               <Eye className="h-4 w-4" />
@@ -382,17 +418,19 @@ function AgentListItem({ agent, viewMode, onEdit, onDelete, onTogglePublic, isUp
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
-                  alt={agent.name || '智能体'}
+                  alt={agent.name || "智能体"}
                   className="h-10 w-10 rounded-full object-cover"
                 />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-                  <span className="text-lg">🤖</span>
+                  <Bot className="h-5 w-5 text-text-primary" />
                 </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="text-base font-semibold text-text-primary">{agent.name}</h4>
+              <h4 className="text-base font-semibold text-text-primary">
+                {agent.name}
+              </h4>
               {agent.description && (
                 <p className="mt-1 line-clamp-2 text-sm text-text-secondary">
                   {agent.description}
@@ -412,14 +450,18 @@ function AgentListItem({ agent, viewMode, onEdit, onDelete, onTogglePublic, isUp
             onClick={onTogglePublic}
             disabled={isUpdating}
             className={cn(
-              'rounded p-2 transition-colors',
+              "rounded p-2 transition-colors",
               agent.isPublic
-                ? 'text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
-                : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800',
-              isUpdating && 'opacity-50 cursor-not-allowed',
+                ? "text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
+                : "text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800",
+              isUpdating && "opacity-50 cursor-not-allowed",
             )}
-            title={agent.isPublic ? '已展示给用户（点击隐藏）' : '未展示给用户（点击显示）'}
-            aria-label={agent.isPublic ? '隐藏' : '显示'}
+            title={
+              agent.isPublic
+                ? "已展示给用户（点击隐藏）"
+                : "未展示给用户（点击显示）"
+            }
+            aria-label={agent.isPublic ? "隐藏" : "显示"}
           >
             {agent.isPublic ? (
               <Eye className="h-5 w-5" />
@@ -452,4 +494,3 @@ function AgentListItem({ agent, viewMode, onEdit, onDelete, onTogglePublic, isUp
     </div>
   );
 }
-

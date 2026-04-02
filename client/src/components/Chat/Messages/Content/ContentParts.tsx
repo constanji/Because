@@ -1,17 +1,17 @@
-import { memo, useMemo } from 'react';
-import { ContentTypes } from '@because/data-provider';
+import { memo, useMemo } from "react";
+import { ContentTypes } from "@because/data-provider";
 import type {
   TMessageContentParts,
   SearchResultData,
   TAttachment,
   Agents,
-} from '@because/data-provider';
-import { MessageContext, SearchContext } from '~/Providers';
-import MemoryArtifacts from './MemoryArtifacts';
-import Sources from '~/components/Web/Sources';
-import { mapAttachments } from '~/utils/map';
-import { EditTextPart } from './Parts';
-import Part from './Part';
+} from "@because/data-provider";
+import { MessageContext, SearchContext } from "~/Providers";
+import MemoryArtifacts from "./MemoryArtifacts";
+import Sources from "~/components/Web/Sources";
+import { mapAttachments } from "~/utils/map";
+import { EditTextPart } from "./Parts";
+import Part from "./Part";
 
 type ContentPartsProps = {
   content: Array<TMessageContentParts | undefined> | undefined;
@@ -48,7 +48,10 @@ const ContentParts = memo(
     siblingIdx,
     setSiblingIdx,
   }: ContentPartsProps) => {
-    const attachmentMap = useMemo(() => mapAttachments(attachments ?? []), [attachments]);
+    const attachmentMap = useMemo(
+      () => mapAttachments(attachments ?? []),
+      [attachments],
+    );
 
     const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
 
@@ -126,7 +129,35 @@ const ContentParts = memo(
         }
 
         // 所有 TOOL_CALL（工具调用）都不在 chat 主视图中展示，只在思维链侧边栏展示
+        // 但 chart_generator 图表工具调用需要在聊天中内联显示
         if (part.type === ContentTypes.TOOL_CALL) {
+          const toolCall = part[ContentTypes.TOOL_CALL];
+          if (
+            toolCall &&
+            (toolCall as { name?: string }).name === "chart_generator"
+          ) {
+            return true;
+          }
+          if (
+            toolCall &&
+            (toolCall as { name?: string }).name === "report_generator"
+          ) {
+            return true;
+          }
+          if (
+            toolCall &&
+            (toolCall as { name?: string }).name?.includes("ask_data")
+          ) {
+            return true;
+          }
+          if (
+            toolCall &&
+            (toolCall as { name?: string }).name?.includes(
+              "attribution_analysis",
+            )
+          ) {
+            return true;
+          }
           return false;
         }
 
@@ -143,17 +174,20 @@ const ContentParts = memo(
             }
             const isTextPart =
               part?.type === ContentTypes.TEXT ||
-              (typeof (part as unknown as Agents.MessageContentText)?.text === 'string' &&
+              (typeof (part as unknown as Agents.MessageContentText)?.text ===
+                "string" &&
                 part?.type !== ContentTypes.THINK);
             const isThinkPart =
               part?.type === ContentTypes.THINK ||
-              typeof (part as unknown as Agents.ReasoningDeltaUpdate)?.think === 'string';
+              typeof (part as unknown as Agents.ReasoningDeltaUpdate)?.think ===
+                "string";
             if (!isTextPart && !isThinkPart) {
               return null;
             }
 
             const isToolCall =
-              part.type === ContentTypes.TOOL_CALL || part['tool_call_ids'] != null;
+              part.type === ContentTypes.TOOL_CALL ||
+              part["tool_call_ids"] != null;
             if (isToolCall) {
               return null;
             }
@@ -161,7 +195,11 @@ const ContentParts = memo(
             return (
               <EditTextPart
                 index={idx}
-                part={part as Agents.MessageContentText | Agents.ReasoningDeltaUpdate}
+                part={
+                  part as
+                    | Agents.MessageContentText
+                    | Agents.ReasoningDeltaUpdate
+                }
                 messageId={messageId}
                 isSubmitting={isSubmitting}
                 enterEdit={enterEdit}
@@ -179,14 +217,18 @@ const ContentParts = memo(
       <>
         <SearchContext.Provider value={{ searchResults }}>
           <MemoryArtifacts attachments={attachments} />
-          <Sources messageId={messageId} conversationId={conversationId || undefined} />
+          <Sources
+            messageId={messageId}
+            conversationId={conversationId || undefined}
+          />
           {filteredContent.map((part, idx) => {
             if (!part) {
               return null;
             }
 
             const toolCallId =
-              (part?.[ContentTypes.TOOL_CALL] as Agents.ToolCall | undefined)?.id ?? '';
+              (part?.[ContentTypes.TOOL_CALL] as Agents.ToolCall | undefined)
+                ?.id ?? "";
             const partAttachments = attachmentMap[toolCallId];
 
             return (

@@ -41,6 +41,9 @@ const {
   DatabaseSchema,
   SqlExecutor,
   BeCause,
+  ChartGenerator,
+  ReportGenerator,
+  AttributionAnalysis,
 } = require('../');
 const { primeFiles: primeCodeFiles } = require('~/server/services/Files/Code/process');
 const { createFileSearchTool, primeFiles: primeSearchFiles } = require('./fileSearch');
@@ -192,6 +195,9 @@ const loadTools = async ({
     social: SocialMedia,
     bazi_astrology: BaziAstrology,
     sql_executor: SqlExecutor,
+    chart_generator: ChartGenerator,
+    report_generator: ReportGenerator,
+    attribution_analysis: AttributionAnalysis,
   };
 
   const customConstructors = {

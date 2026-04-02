@@ -28,6 +28,7 @@ import {
   FileText,
   Trash,
   Info,
+  Sparkles,
 } from "lucide-react";
 
 const DAT_API_BASE =
@@ -80,6 +81,21 @@ interface LightSchema {
   indices?: string[];
 }
 
+interface DatasourcePrompt {
+  _id: string;
+  datasourceId: string;
+  projectId: string;
+  label: string;
+  description?: string;
+  content: string;
+  icon?: string;
+  iconColor?: string;
+  sortOrder: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const getDefaultDatasource = (
   projectId = "",
 ): Omit<DatDatasource, "_id" | "createdAt" | "updatedAt"> => ({
@@ -101,51 +117,7 @@ const getDefaultDatasource = (
 const PROVIDER_OPTIONS = [
   { label: "MySQL", value: "mysql" },
   { label: "PostgreSQL", value: "postgresql" },
-  { label: "ClickHouse", value: "clickhouse" },
-  { label: "SQLite", value: "sqlite" },
-  { label: "DuckDB", value: "duckdb" },
-  { label: "Oracle", value: "oracle" },
-  { label: "SQL Server", value: "sqlserver" },
-  { label: "MongoDB", value: "mongodb" },
-  { label: "Redis", value: "redis" },
-  { label: "Elasticsearch", value: "elasticsearch" },
-  { label: "Hive", value: "hive" },
-  { label: "Presto", value: "presto" },
-  { label: "Trino", value: "trino" },
-  { label: "Doris", value: "doris" },
-  { label: "StarRocks", value: "starrocks" },
-  { label: "TiDB", value: "tidb" },
-  { label: "OceanBase", value: "oceanbase" },
 ];
-
-// 辅助函数用于从 LightSchema 生成 Markdown
-const generateSchemaMarkdown = (schema: LightSchema): string => {
-  let md = `## Table: ${schema.tableName}\n`;
-  md += `### Table description\n${schema.tableDescription || "No description available."}\n\n`;
-  md += `### Column information\n`;
-  md += `| column_name | column_type | column_description | value_examples |\n`;
-  md += `| --- | --- | --- | --- |\n`;
-  schema.columns.forEach((col) => {
-    const samples = col.sampleValues ? JSON.stringify(col.sampleValues) : "[]";
-    md += `| ${col.name} | ${col.type} | ${col.description || ""} | ${samples} |\n`;
-  });
-
-  if (schema.primaryKeys?.length) {
-    md += `\n### Primary keys\n${schema.primaryKeys.join(", ")}\n`;
-  }
-
-  if (schema.foreignKeys?.length) {
-    md += `\n### Foreign keys\n`;
-    schema.foreignKeys.forEach((fk) => {
-      md += `- ${fk.columnName} -> ${fk.referencedTable}(${fk.referencedColumn})\n`;
-    });
-  }
-
-  if (schema.indices?.length) {
-    md += `\n### Indices\n${schema.indices.join(", ")}\n`;
-  }
-  return md;
-};
 
 export default function DatasourceManagement() {
   const { showToast } = useToastContext();
@@ -178,9 +150,16 @@ export default function DatasourceManagement() {
   );
   const [tableSearch, setTableSearch] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [activeDetailTab, setActiveDetailTab] = useState<"schema" | "overview">(
+  const [isLoadingSchema, setIsLoadingSchema] = useState(false);
+  const [activeDetailTab, setActiveDetailTab] = useState<"schema" | "overview" | "prompts" | "pdfs">(
     "schema",
   );
+
+  // Prompts management state
+  const [prompts, setPrompts] = useState<DatasourcePrompt[]>([]);
+  const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState<Partial<DatasourcePrompt> | null>(null);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 
   // Filtered schemas based on search
   const filteredSchemas = useMemo(() => {
@@ -268,8 +247,30 @@ export default function DatasourceManagement() {
 
   // Fetch Light Schemas for a datasource
   const fetchLightSchemas = useCallback(
-    async (projectId: string, datasourceId: string) => {
+    async (projectId: string, datasourceId: string, forceRefresh = false) => {
+      const cacheKey = `DAT_LIGHT_SCHEMA_${datasourceId}`;
+
+      // 如果不是强制刷新，且存在缓存数据，优先使用缓存
+      if (!forceRefresh) {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            const parsedCache = JSON.parse(cached);
+            if (Array.isArray(parsedCache) && parsedCache.length > 0) {
+              setSchemas(parsedCache);
+              if (!selectedTableName) {
+                setSelectedTableName(parsedCache[0].tableName);
+              }
+              return;
+            }
+          } catch (e) {
+            // ignore parsing error
+          }
+        }
+      }
+
       try {
+        setIsLoadingSchema(true);
         const response = await fetch(
           `${DAT_API_BASE}/api/v1/content-store/light-schema/list?projectId=${projectId}&datasourceId=${datasourceId}`,
         );
@@ -281,9 +282,16 @@ export default function DatasourceManagement() {
         if (data && data.length > 0 && !selectedTableName) {
           setSelectedTableName(data[0].tableName);
         }
+
+        // 写入缓存
+        if (data && Array.isArray(data)) {
+          localStorage.setItem(cacheKey, JSON.stringify(data));
+        }
       } catch (error) {
         console.error("Failed to load schemas:", error);
         setSchemas([]);
+      } finally {
+        setIsLoadingSchema(false);
       }
     },
     [selectedTableName],
@@ -313,6 +321,7 @@ export default function DatasourceManagement() {
       await fetchLightSchemas(
         viewingDatasource.projectId,
         viewingDatasource._id,
+        true,
       );
     } catch (error) {
       showToast({
@@ -370,6 +379,11 @@ export default function DatasourceManagement() {
       showToast({ message: result || "清空预处理数据成功", status: "success" });
       setSchemas([]);
       setSelectedTableName(null);
+
+      // 清除缓存
+      if (viewingDatasource._id) {
+        localStorage.removeItem(`DAT_LIGHT_SCHEMA_${viewingDatasource._id}`);
+      }
     } catch (error) {
       showToast({
         message: `清空失败: ${error instanceof Error ? error.message : "未知错误"}`,
@@ -377,6 +391,131 @@ export default function DatasourceManagement() {
       });
     }
   }, [viewingDatasource, showToast]);
+
+  // ============ Prompts Management Functions ============
+
+  // Fetch prompts for a datasource
+  const fetchPrompts = useCallback(
+    async (datasourceId: string) => {
+      setIsLoadingPrompts(true);
+      try {
+        const response = await fetch(
+          `${getApiBase()}/api/datasource-prompts?datasourceId=${datasourceId}&includeDisabled=true`,
+          {
+            method: "GET",
+            headers: getHeaders(),
+            credentials: "include",
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setPrompts(data.prompts || []);
+        } else {
+          setPrompts([]);
+        }
+      } catch (error) {
+        console.error("Error fetching prompts:", error);
+        setPrompts([]);
+      } finally {
+        setIsLoadingPrompts(false);
+      }
+    },
+    [getApiBase, getHeaders]
+  );
+
+  // Save prompt (create or update)
+  const savePrompt = useCallback(async () => {
+    if (!editingPrompt || !viewingDatasource) return;
+
+    if (!editingPrompt.content?.trim()) {
+      showToast({ message: "请填写提示内容", status: "error" });
+      return;
+    }
+
+    // Auto-fill label from content since the UI no longer requests a manual title.
+    const autoLabel = editingPrompt.content.slice(0, 50) + (editingPrompt.content.length > 50 ? '...' : '');
+    const modifiedPromptForSave = {
+      ...editingPrompt,
+      label: autoLabel,
+      icon: "BulbOutlined", // Default generic icon just in case DB schema requires it
+      iconColor: "#1890FF"
+    };
+
+    setIsSavingPrompt(true);
+    try {
+      const isEdit = !!(editingPrompt as DatasourcePrompt)._id;
+      const url = isEdit
+        ? `${getApiBase()}/api/datasource-prompts/${(editingPrompt as DatasourcePrompt)._id}`
+        : `${getApiBase()}/api/datasource-prompts`;
+
+      const body = {
+        ...modifiedPromptForSave,
+        datasourceId: viewingDatasource._id,
+        projectId: viewingDatasource.projectId,
+      };
+
+      const response = await fetch(url, {
+        method: isEdit ? "PUT" : "POST",
+        headers: getHeaders(),
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: "保存失败" }));
+        throw new Error(error.error || "保存失败");
+      }
+
+      showToast({
+        message: isEdit ? "提示词更新成功" : "提示词创建成功",
+        status: "success",
+      });
+
+      setEditingPrompt(null);
+      fetchPrompts(viewingDatasource._id);
+    } catch (error) {
+      console.error("Error saving prompt:", error);
+      showToast({
+        message: `保存失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        status: "error",
+      });
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  }, [editingPrompt, viewingDatasource, getApiBase, getHeaders, showToast, fetchPrompts]);
+
+  // Delete prompt
+  const deletePrompt = useCallback(
+    async (promptId: string) => {
+      if (!viewingDatasource) return;
+      if (!confirm("确定要删除这个提示词吗？")) return;
+
+      try {
+        const response = await fetch(
+          `${getApiBase()}/api/datasource-prompts/${promptId}`,
+          {
+            method: "DELETE",
+            headers: getHeaders(),
+            credentials: "include",
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("删除失败");
+        }
+
+        showToast({ message: "提示词删除成功", status: "success" });
+        fetchPrompts(viewingDatasource._id);
+      } catch (error) {
+        console.error("Error deleting prompt:", error);
+        showToast({
+          message: `删除失败: ${error instanceof Error ? error.message : "未知错误"}`,
+          status: "error",
+        });
+      }
+    },
+    [viewingDatasource, getApiBase, getHeaders, showToast, fetchPrompts]
+  );
 
   // Open datasource detail view
   const openDatasourceDetail = useCallback(
@@ -386,11 +525,14 @@ export default function DatasourceManagement() {
       setSchemas([]);
       setSelectedTableName(null);
       setTableSearch("");
+      setPrompts([]);
+      setEditingPrompt(null);
       if (ds.projectId) {
         fetchLightSchemas(ds.projectId, ds._id);
       }
+      fetchPrompts(ds._id);
     },
-    [fetchLightSchemas],
+    [fetchLightSchemas, fetchPrompts],
   );
 
   // Close datasource detail view
@@ -399,6 +541,8 @@ export default function DatasourceManagement() {
     setSchemas([]);
     setSelectedTableName(null);
     setTableSearch("");
+    setPrompts([]);
+    setEditingPrompt(null);
   }, []);
 
   // Close dropdown on click outside
@@ -644,7 +788,7 @@ export default function DatasourceManagement() {
             数据源管理
           </h2>
           <p className="mt-1 text-sm text-text-secondary">
-            管理数据库连接配置，并绑定到智能体
+            管理数据库连接配置,并绑定到智能体
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1125,6 +1269,24 @@ export default function DatasourceManagement() {
                 <Info className="inline h-4 w-4 mr-1.5" />
                 概览与配置
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveDetailTab("prompts")}
+                className={cn(
+                  "px-4 py-3 text-sm font-medium border-b-2 -mb-[1px] transition-colors",
+                  activeDetailTab === "prompts"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-text-secondary hover:text-text-primary",
+                )}
+              >
+                <Sparkles className="inline h-4 w-4 mr-1.5" />
+                提示集
+                {prompts.length > 0 && (
+                  <span className="ml-1.5 inline-flex items-center rounded-full bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    {prompts.length}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Tab Content */}
@@ -1154,7 +1316,12 @@ export default function DatasourceManagement() {
                       </div>
                     </div>
                     <div className="flex-1 overflow-y-auto">
-                      {filteredSchemas.length > 0 ? (
+                      {isLoadingSchema ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                          <RefreshCw className="h-6 w-6 animate-spin text-blue-500 mb-3" />
+                          <p className="text-sm text-text-tertiary">加载架构中...</p>
+                        </div>
+                      ) : filteredSchemas.length > 0 ? (
                         filteredSchemas.map((s) => (
                           <div
                             key={s.tableName}
@@ -1340,7 +1507,7 @@ export default function DatasourceManagement() {
                     )}
                   </div>
                 </div>
-              ) : (
+              ) : activeDetailTab === "overview" ? (
                 <div className="p-6 overflow-auto h-full">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Basic Info Card */}
@@ -1509,7 +1676,162 @@ export default function DatasourceManagement() {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : activeDetailTab === "prompts" ? (
+                <div className="h-full p-6 overflow-auto">
+                  {/* Prompts Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-text-primary">
+                        提示集管理
+                      </h4>
+                      <p className="text-xs text-text-tertiary mt-1">
+                        配置快捷提示词,帮助用户快速开始对话(最多8个)
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => setEditingPrompt({
+                        label: "",
+                        description: "",
+                        content: "",
+                        icon: "BulbOutlined",
+                        iconColor: "#FFD700",
+                        enabled: true,
+                      })}
+                      disabled={prompts.length >= 8}
+                      className="btn btn-primary text-sm flex items-center gap-1"
+                    >
+                      <Plus className="h-4 w-4" />
+                      添加提示词
+                    </Button>
+                  </div>
+
+                  {/* Prompts List */}
+                  {isLoadingPrompts ? (
+                    <div className="flex items-center justify-center h-40">
+                      <RefreshCw className="h-5 w-5 animate-spin text-text-tertiary" />
+                    </div>
+                  ) : prompts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-40 text-text-tertiary">
+                      <Sparkles className="h-10 w-10 mb-3 text-gray-300" />
+                      <p className="text-sm">暂无提示词</p>
+                      <p className="text-xs mt-1">点击上方按钮添加提示词</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {prompts.map((prompt, index) => (
+                        <div
+                          key={prompt._id}
+                          className={cn(
+                            "flex items-start gap-3 p-3 rounded-lg border transition-colors",
+                            prompt.enabled
+                              ? "border-border-light bg-surface-secondary hover:bg-surface-hover"
+                              : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50 opacity-60"
+                          )}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm text-text-primary line-clamp-2">
+                                {prompt.content}
+                              </span>
+                              {!prompt.enabled && (
+                                <span className="text-xs text-gray-400 flex-shrink-0">(已禁用)</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setEditingPrompt(prompt)}
+                              className="p-1.5 rounded hover:bg-surface-hover text-text-secondary"
+                              title="编辑"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deletePrompt(prompt._id)}
+                              className="p-1.5 rounded hover:bg-red-50 text-red-500 dark:hover:bg-red-900/20"
+                              title="删除"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Edit Prompt Modal */}
+                  {editingPrompt && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                      <div className="w-full max-w-lg rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                          <h3 className="text-lg font-semibold text-text-primary">
+                            {(editingPrompt as DatasourcePrompt)._id ? "编辑提示词" : "添加提示词"}
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPrompt(null)}
+                            className="rounded p-1 text-text-secondary hover:bg-surface-hover"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                          {/* Content */}
+                          <div>
+                            <textarea
+                              value={editingPrompt.content || ""}
+                              onChange={(e) => setEditingPrompt(prev => prev ? { ...prev, content: e.target.value } : prev)}
+                              maxLength={500}
+                              rows={5}
+                              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                              placeholder="输入提示内容，例如：请分析2024年Q3的销售数据趋势"
+                            />
+                            <p className="text-xs text-text-tertiary mt-1 text-right">
+                              {(editingPrompt.content || "").length}/500
+                            </p>
+                          </div>
+
+                          {/* Enabled */}
+                          <div className="flex items-center gap-2 pt-2 border-t border-border-light">
+                            <input
+                              type="checkbox"
+                              id="promptEnabled"
+                              checked={editingPrompt.enabled !== false}
+                              onChange={(e) => setEditingPrompt(prev => prev ? { ...prev, enabled: e.target.checked } : prev)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                            />
+                            <label htmlFor="promptEnabled" className="text-sm text-text-primary cursor-pointer">
+                              启用此提示词
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 border-t border-border-light p-4">
+                          <Button
+                            type="button"
+                            onClick={() => setEditingPrompt(null)}
+                            className="btn btn-neutral rounded-lg px-4 py-2"
+                          >
+                            取消
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={savePrompt}
+                            disabled={isSavingPrompt}
+                            className="btn btn-primary rounded-lg px-4 py-2"
+                          >
+                            {isSavingPrompt ? "保存中..." : "保存"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

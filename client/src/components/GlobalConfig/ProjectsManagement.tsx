@@ -1214,10 +1214,10 @@ export default function ProjectsManagement() {
                                     {/* Embedding Model */}
                                     <div className="rounded-lg border border-border-light bg-surface-primary p-4 shadow-sm">
                                         <h4 className="mb-4 text-base font-medium text-text-primary border-b border-border-light pb-2">
-                                            Embedding 模型
+                                            嵌入模型配置
                                         </h4>
                                         <div className="mb-4">
-                                            <label className="mb-1 block text-sm font-medium text-text-primary">Provider</label>
+                                            <label className="mb-1 block text-sm font-medium text-text-primary">供应商</label>
                                             <select
                                                 value={editingProject.embedding?.provider}
                                                 onChange={(e) => updateEditingProject('embedding', { provider: e.target.value, configuration: {} })}
@@ -1241,10 +1241,10 @@ export default function ProjectsManagement() {
                                     {/* Embedding Store */}
                                     <div className="rounded-lg border border-border-light bg-surface-primary p-4 shadow-sm">
                                         <h4 className="mb-4 text-base font-medium text-text-primary border-b border-border-light pb-2">
-                                            Embedding Store
+                                            嵌入存储模型配置
                                         </h4>
                                         <div className="mb-4">
-                                            <label className="mb-1 block text-sm font-medium text-text-primary">Provider</label>
+                                            <label className="mb-1 block text-sm font-medium text-text-primary">供应商</label>
                                             <select
                                                 value={editingProject.embedding_store?.provider}
                                                 onChange={(e) => updateEditingProject('embedding_store', { provider: e.target.value, configuration: {} })}
@@ -1273,7 +1273,7 @@ export default function ProjectsManagement() {
                                     {/* Content Store */}
                                     <div className="rounded-lg border border-border-light bg-surface-primary p-4 shadow-sm">
                                         <h4 className="mb-4 text-base font-medium text-text-primary border-b border-border-light pb-2">
-                                            Content Store
+                                            内容存储配置
                                         </h4>
                                         <div className="mb-4">
                                             <label className="mb-1 block text-sm font-medium text-text-primary">Provider</label>
@@ -1300,10 +1300,10 @@ export default function ProjectsManagement() {
                                     {/* Reranking */}
                                     <div className="rounded-lg border border-border-light bg-surface-primary p-4 shadow-sm">
                                         <h4 className="mb-4 text-base font-medium text-text-primary border-b border-border-light pb-2">
-                                            Reranking (重排序模型)
+                                            重排序模型
                                         </h4>
                                         <div className="mb-4">
-                                            <label className="mb-1 block text-sm font-medium text-text-primary">Provider</label>
+                                            <label className="mb-1 block text-sm font-medium text-text-primary">供应商</label>
                                             <select
                                                 value={editingProject.reranking?.provider}
                                                 onChange={(e) => updateEditingProject('reranking', { provider: e.target.value, configuration: {} })}
@@ -1460,37 +1460,39 @@ export default function ProjectsManagement() {
                                             <p className="text-sm">暂无SQL示例对</p>
                                         </div>
                                     ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm border-collapse">
-                                                <thead>
-                                                    <tr className="bg-surface-secondary">
-                                                        <th className="border border-border-light px-3 py-2 text-left font-medium w-2/5">问题</th>
-                                                        <th className="border border-border-light px-3 py-2 text-left font-medium">SQL</th>
-                                                        <th className="border border-border-light px-3 py-2 text-center font-medium w-16">操作</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {sqlPairs.map((item, idx) => (
-                                                        <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
-                                                            <td className="border border-border-light px-3 py-2 text-blue-600 dark:text-blue-400">{item.question}</td>
-                                                            <td className="border border-border-light px-3 py-2">
-                                                                <code className="text-xs font-mono text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">{item.sql}</code>
-                                                            </td>
-                                                            <td className="border border-border-light px-3 py-2 text-center">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (confirm('确定删除此项吗？')) handleRemoveSqlPair(item.id);
-                                                                    }}
-                                                                    className="text-red-500 hover:text-red-600"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-sm border-collapse text-white">
+                                          <thead>
+                                          <tr className="bg-surface-secondary">
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium w-2/5 text-white">问题</th>
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium text-white">SQL</th>
+                                            <th className="border border-border-light px-3 py-2 text-center font-medium w-16 text-white">操作</th>
+                                          </tr>
+                                          </thead>
+                                          <tbody>
+                                          {sqlPairs.map((item, idx) => (
+                                            <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
+                                              <td className="border border-border-light px-3 py-2 text-white">{item.question}</td>
+                                              <td className="border border-border-light px-3 py-2 text-white">
+                                                <code className="text-xs font-mono text-white bg-gray-800/60 px-1.5 py-0.5 rounded">
+                                                  {item.sql}
+                                                </code>
+                                              </td>
+                                              <td className="border border-border-light px-3 py-2 text-center">
+                                                <button
+                                                  onClick={() => {
+                                                    if (confirm('确定删除此项吗？')) handleRemoveSqlPair(item.id);
+                                                  }}
+                                                  className="text-red-400 hover:text-red-300 transition-colors"
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
                                     )}
                                 </div>
                             )}
@@ -1538,43 +1540,43 @@ export default function ProjectsManagement() {
                                             <p className="text-sm">暂无同义词</p>
                                         </div>
                                     ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm border-collapse">
-                                                <thead>
-                                                    <tr className="bg-surface-secondary">
-                                                        <th className="border border-border-light px-3 py-2 text-left font-medium w-32">词</th>
-                                                        <th className="border border-border-light px-3 py-2 text-left font-medium">同义词</th>
-                                                        <th className="border border-border-light px-3 py-2 text-center font-medium w-16">操作</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {synonyms.map((item, idx) => (
-                                                        <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
-                                                            <td className="border border-border-light px-3 py-2 font-medium">{item.word}</td>
-                                                            <td className="border border-border-light px-3 py-2">
-                                                                <div className="flex flex-wrap gap-1">
-                                                                    {item.synonyms.map((syn, i) => (
-                                                                        <span key={i} className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-900/30 dark:text-blue-400">
-                                                                            {syn}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            </td>
-                                                            <td className="border border-border-light px-3 py-2 text-center">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (confirm('确定删除此项吗？')) handleRemoveSynonym(item.id);
-                                                                    }}
-                                                                    className="text-red-500 hover:text-red-600"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-sm border-collapse text-white">
+                                          <thead>
+                                          <tr className="bg-surface-secondary">
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium w-32 text-white">词</th>
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium text-white">同义词</th>
+                                            <th className="border border-border-light px-3 py-2 text-center font-medium w-16 text-white">操作</th>
+                                          </tr>
+                                          </thead>
+                                          <tbody>
+                                          {synonyms.map((item, idx) => (
+                                            <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
+                                              <td className="border border-border-light px-3 py-2 font-medium text-white">{item.word}</td>
+                                              <td className="border border-border-light px-3 py-2 text-white">
+                                                <div className="flex flex-wrap gap-1">
+                                                  {item.synonyms.map((syn, i) => (
+                                                    <span key={i} className="inline-flex items-center rounded-full bg-blue-900/40 px-2 py-0.5 text-xs text-blue-300 ring-1 ring-inset ring-blue-500/20">
+                                    {syn}
+                                </span>
+                                                  ))}
+                                                </div>
+                                              </td>
+                                              <td className="border border-border-light px-3 py-2 text-center">
+                                                <button
+                                                  onClick={() => {
+                                                    if (confirm('确定删除此项吗？')) handleRemoveSynonym(item.id);
+                                                  }}
+                                                  className="text-red-400 hover:text-red-300 transition-colors"
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
                                     )}
                                 </div>
                             )}
@@ -1633,37 +1635,40 @@ export default function ProjectsManagement() {
                                             <p className="text-sm">暂无业务知识</p>
                                         </div>
                                     ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm border-collapse">
-                                                <thead>
-                                                    <tr className="bg-surface-secondary">
-                                                        <th className="border border-border-light px-3 py-2 text-left font-medium w-16">序号</th>
-                                                        <th className="border border-border-light px-3 py-2 text-left font-medium">内容</th>
-                                                        <th className="border border-border-light px-3 py-2 text-center font-medium w-16">操作</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {docs.map((item, idx) => (
-                                                        <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
-                                                            <td className="border border-border-light px-3 py-2 text-center">{idx + 1}</td>
-                                                            <td className="border border-border-light px-3 py-2">
-                                                                <p className="line-clamp-2">{item.content}</p>
-                                                            </td>
-                                                            <td className="border border-border-light px-3 py-2 text-center">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (confirm('确定删除此项吗？')) handleRemoveDoc(item.id);
-                                                                    }}
-                                                                    className="text-red-500 hover:text-red-600"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-sm border-collapse text-white">
+                                          <thead>
+                                          <tr className="bg-surface-secondary">
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium w-16 text-white">序号</th>
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium text-white">内容</th>
+                                            <th className="border border-border-light px-3 py-2 text-center font-medium w-16 text-white">操作</th>
+                                          </tr>
+                                          </thead>
+                                          <tbody>
+                                          {docs.map((item, idx) => (
+                                            <tr
+                                              key={item.id}
+                                              className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}
+                                            >
+                                              <td className="border border-border-light px-3 py-2 text-center text-white">{idx + 1}</td>
+                                              <td className="border border-border-light px-3 py-2 text-white">
+                                                <p className="line-clamp-2 text-white">{item.content}</p>
+                                              </td>
+                                              <td className="border border-border-light px-3 py-2 text-center">
+                                                <button
+                                                  onClick={() => {
+                                                    if (confirm('确定删除此项吗？')) handleRemoveDoc(item.id);
+                                                  }}
+                                                  className="text-red-500 hover:text-red-600"
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
                                     )}
                                 </div>
                             )}

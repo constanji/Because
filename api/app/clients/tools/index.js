@@ -1,23 +1,26 @@
-const manifest = require('./manifest');
+const manifest = require("./manifest");
 
 // Structured Tools
-const DALLE3 = require('./structured/DALLE3');
-const FluxAPI = require('./structured/FluxAPI');
-const OpenWeather = require('./structured/OpenWeather');
-const StructuredWolfram = require('./structured/Wolfram');
-const createYouTubeTools = require('./structured/YouTube');
-const StructuredACS = require('./structured/AzureAISearch');
-const StructuredSD = require('./structured/StableDiffusion');
-const GoogleSearchAPI = require('./structured/GoogleSearch');
-const TraversaalSearch = require('./structured/TraversaalSearch');
-const createOpenAIImageTools = require('./structured/OpenAIImageTools');
-const TavilySearchResults = require('./structured/TavilySearchResults');
-const Speckit = require('./structured/Speckit');
-const SocialMedia = require('./structured/SocialMedia');
-const BaziAstrology = require('./structured/BaziAstrology');
-const DatabaseSchema = require('./structured/DatabaseSchema');
-const SqlExecutor = require('./structured/SqlExecutor');
-const BeCause = require('./structured/BeCause');
+const DALLE3 = require("./structured/DALLE3");
+const FluxAPI = require("./structured/FluxAPI");
+const OpenWeather = require("./structured/OpenWeather");
+const StructuredWolfram = require("./structured/Wolfram");
+const createYouTubeTools = require("./structured/YouTube");
+const StructuredACS = require("./structured/AzureAISearch");
+const StructuredSD = require("./structured/StableDiffusion");
+const GoogleSearchAPI = require("./structured/GoogleSearch");
+const TraversaalSearch = require("./structured/TraversaalSearch");
+const createOpenAIImageTools = require("./structured/OpenAIImageTools");
+const TavilySearchResults = require("./structured/TavilySearchResults");
+const Speckit = require("./structured/Speckit");
+const SocialMedia = require("./structured/SocialMedia");
+const BaziAstrology = require("./structured/BaziAstrology");
+const DatabaseSchema = require("./structured/DatabaseSchema");
+const SqlExecutor = require("./structured/SqlExecutor");
+const BeCause = require("./structured/BeCause");
+const ChartGenerator = require("./structured/ChartGenerator");
+const ReportGenerator = require("./structured/ReportGenerator");
+const AttributionAnalysis = require("./structured/AttributionAnalysis");
 
 module.exports = {
   ...manifest,
@@ -39,4 +42,7 @@ module.exports = {
   DatabaseSchema,
   SqlExecutor,
   BeCause,
+  ChartGenerator,
+  ReportGenerator,
+  AttributionAnalysis,
 };
