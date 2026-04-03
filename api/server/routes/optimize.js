@@ -16,44 +16,43 @@ router.use(configMiddleware);
 
 router.use(async (req, res, next) => {
   try {
-    const { endpoint, agent_id } = req.body;
+    const { endpoint, agent_id, model } = req.body;
+
+    // 1. Resolve agent if agent_id is provided
     if (isAgentsEndpoint(endpoint) && agent_id) {
       const agent = await getAgent({ id: agent_id });
-      if (agent && agent.provider && !isAgentsEndpoint(agent.provider)) {
-        const provider = agent.provider;
-        const model =
-          req.body.model || agent.model_parameters?.model || agent.model;
+      if (agent) {
+        const provider = agent.provider || EModelEndpoint.openAI;
+        const resolvedModel = model || agent.model_parameters?.model || agent.model;
 
         req.body.endpoint = provider;
-        req.body.model = model;
+        req.body.model = resolvedModel;
 
-        // 检查它是不是原生端点，否则就是自定义的
-        const isNative = Object.values(EModelEndpoint).includes(provider);
-        if (!isNative) {
-          req.body.endpointType = EModelEndpoint.custom;
-        } else {
-          req.body.endpointType = provider;
-        }
-
-        // 将智能体参数合并到正体中
+        // Merge agent parameters
         req.body = {
           ...agent.model_parameters,
           ...req.body,
-          endpoint: provider,
-          model: model,
+          endpoint: req.body.endpoint,
+          model: req.body.model,
         };
 
         logger.debug(
-          `[api/optimize] Resolved agent ${agent_id} to provider: ${provider}, model: ${model}`,
-        );
-      } else {
-        req.body.endpoint = EModelEndpoint.openAI;
-        req.body.endpointType = EModelEndpoint.openAI;
-        logger.debug(
-          `[api/optimize] Agent ${agent_id} resolution failed or fallback used`,
+          `[api/optimize] Resolved agent ${agent_id} to provider: ${req.body.endpoint}, model: ${req.body.model}`,
         );
       }
     }
+
+    // 2. Ensure endpointType is set correctly for native vs custom endpoints
+    const currentEndpoint = req.body.endpoint;
+    if (currentEndpoint) {
+      const isNative = Object.values(EModelEndpoint).includes(currentEndpoint);
+      if (!isNative) {
+        req.body.endpointType = EModelEndpoint.custom;
+      } else {
+        req.body.endpointType = currentEndpoint;
+      }
+    }
+
     next();
   } catch (err) {
     logger.error("[api/optimize] Error resolving agent endpoint", err);
