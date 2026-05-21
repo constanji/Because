@@ -75,6 +75,22 @@ const BaseOptionsSchema = z.object({
       }),
     )
     .optional(),
+  /**
+   * Automatic injection of execution context (e.g. projectId/datasourceId) into MCP tool calls.
+   * See api/server/services/McpContextResolver.js for built-in defaults per server.
+   */
+  contextInjection: z
+    .object({
+      resolve: z.array(
+        z.object({
+          from: z.enum(['conversation', 'requestBody', 'agentBinding']),
+          field: z.string().optional(),
+        }),
+      ),
+      inject: z.record(z.string(), z.string()),
+      hideFromSchema: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 export const StdioOptionsSchema = BaseOptionsSchema.extend({

@@ -1,0 +1,313 @@
+const { logger } = require("@because/data-schemas");
+const { getDatDatasourceModel } = require("~/models/DatDatasource");
+const { getConvo } = require("~/models/Conversation");
+const { Conversation } = require("~/db/models");
+const { getDataSourceByAgentId } = require("~/server/services/DataSource");
+
+/** @type {Record<string, import('./McpContextResolver').ContextInjectionConfig>} */
+const DEFAULT_CONTEXT_INJECTION = {
+  "becauseai-server": {
+    resolve: [
+      { from: "conversation" },
+      { from: "requestBody", field: "datasourceId" },
+      { from: "agentBinding" },
+    ],
+    inject: {
+      arg1: "projectId",
+      arg2: "datasourceId",
+    },
+    hideFromSchema: ["arg1", "arg2"],
+  },
+  "analysis-server": {
+    resolve: [
+      { from: "conversation" },
+      { from: "requestBody", field: "datasourceId" },
+      { from: "agentBinding" },
+    ],
+    inject: {
+      projectId: "projectId",
+      datasourceId: "datasourceId",
+    },
+    hideFromSchema: ["projectId", "datasourceId"],
+  },
+};
+
+/** @type {Map<string, { projectId: string, datasourceId: string, expiresAt: number }>} */
+const datasourceCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * @typedef {{ from: 'conversation' | 'requestBody' | 'agentBinding', field?: string }} ResolveSource
+ * @typedef {{ resolve: ResolveSource[], inject: Record<string, string>, hideFromSchema?: string[] }} ContextInjectionConfig
+ * @typedef {{ projectId: string, datasourceId: string, source?: string }} McpExecutionContext
+ */
+
+/**
+ * @param {string} serverName
+ * @param {Record<string, unknown> | undefined} mcpConfig
+ * @returns {ContextInjectionConfig | null}
+ */
+function getContextInjectionConfig(serverName, mcpConfig) {
+  const fromConfig = mcpConfig?.[serverName]?.contextInjection;
+  if (fromConfig?.inject && fromConfig?.resolve) {
+    return fromConfig;
+  }
+  return DEFAULT_CONTEXT_INJECTION[serverName] ?? null;
+}
+
+/**
+ * Remove injected params from tool JSON schema so the model does not fill them.
+ * @param {Record<string, unknown> | undefined} parameters
+ * @param {string[] | undefined} hideFromSchema
+ * @returns {Record<string, unknown> | undefined}
+ */
+function stripHiddenParamsFromSchema(parameters, hideFromSchema) {
+  if (!parameters?.properties || !hideFromSchema?.length) {
+    return parameters;
+  }
+
+  const hidden = new Set(hideFromSchema);
+  const hasHidden = hideFromSchema.some((key) => key in parameters.properties);
+  if (!hasHidden) {
+    return parameters;
+  }
+
+  const modified = { ...parameters, properties: { ...parameters.properties } };
+  for (const key of hidden) {
+    delete modified.properties[key];
+  }
+  if (Array.isArray(modified.required)) {
+    modified.required = modified.required.filter((r) => !hidden.has(r));
+  }
+  return modified;
+}
+
+/**
+ * @param {string} datasourceId
+ * @returns {Promise<{ projectId: string, datasourceId: string } | null>}
+ */
+async function lookupDatasource(datasourceId) {
+  const cached = datasourceCache.get(datasourceId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return {
+      projectId: cached.projectId,
+      datasourceId: cached.datasourceId,
+    };
+  }
+
+  const DatDatasource = await getDatDatasourceModel();
+  const dataSource = await DatDatasource.findById(datasourceId).lean();
+  if (!dataSource?.projectId) {
+    return null;
+  }
+
+  const ctx = {
+    projectId: String(dataSource.projectId),
+    datasourceId: String(datasourceId),
+  };
+  datasourceCache.set(datasourceId, { ...ctx, expiresAt: Date.now() + CACHE_TTL_MS });
+  return ctx;
+}
+
+/**
+ * @param {string} datasourceId
+ * @returns {Promise<McpExecutionContext | null>}
+ */
+async function resolveFromDatasourceId(datasourceId, source) {
+  const ctx = await lookupDatasource(datasourceId);
+  if (!ctx) {
+    return null;
+  }
+  return { ...ctx, source };
+}
+
+/**
+ * @param {ResolveSource[]} resolveSources
+ * @param {object} params
+ * @param {import('@langchain/core/runnables').RunnableConfig['configurable']} [params.configurable]
+ * @returns {Promise<McpExecutionContext | null>}
+ */
+async function resolveMcpExecutionContext({ resolveSources, configurable }) {
+  const requestBody = configurable?.requestBody;
+  const userId = configurable?.user?.id || configurable?.user_id;
+  const conversationId = requestBody?.conversationId;
+  const agentId = configurable?.last_agent_id;
+
+  for (const source of resolveSources) {
+    if (source.from === "conversation" && userId && conversationId) {
+      try {
+        const convo = await getConvo(userId, conversationId);
+        const stored = convo?.agentOptions?.mcpContext;
+        if (stored?.datasourceId && stored?.projectId) {
+          return {
+            projectId: String(stored.projectId),
+            datasourceId: String(stored.datasourceId),
+            source: "conversation",
+          };
+        }
+        if (stored?.datasourceId) {
+          const ctx = await resolveFromDatasourceId(stored.datasourceId, "conversation");
+          if (ctx) {
+            return ctx;
+          }
+        }
+      } catch (error) {
+        logger.warn("[McpContext] Failed to read conversation mcpContext:", error);
+      }
+    }
+
+    if (source.from === "requestBody") {
+      const field = source.field || "datasourceId";
+      const rawId = requestBody?.[field];
+      if (rawId) {
+        const ctx = await resolveFromDatasourceId(String(rawId), "requestBody");
+        if (ctx) {
+          return ctx;
+        }
+      }
+    }
+
+    if (source.from === "agentBinding" && agentId) {
+      try {
+        const dataSource = await getDataSourceByAgentId(agentId);
+        if (dataSource?._id && dataSource?.projectId) {
+          return {
+            projectId: String(dataSource.projectId),
+            datasourceId: String(dataSource._id),
+            source: "agentBinding",
+          };
+        }
+      } catch (error) {
+        logger.warn("[McpContext] Agent binding lookup failed:", error);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Persist resolved context on the conversation (fire-and-forget).
+ * @param {object} params
+ */
+function persistConversationMcpContext({ userId, conversationId, context }) {
+  if (!userId || !conversationId || !context?.datasourceId) {
+    return;
+  }
+
+  Conversation.findOneAndUpdate(
+    { user: userId, conversationId },
+    {
+      $set: {
+        "agentOptions.mcpContext": {
+          datasourceId: context.datasourceId,
+          projectId: context.projectId,
+        },
+      },
+    },
+  ).catch((error) => {
+    logger.warn("[McpContext] Failed to persist conversation mcpContext:", error);
+  });
+}
+
+/**
+ * Merge execution context into tool arguments without overwriting explicit LLM values.
+ * @param {Record<string, unknown>} toolArguments
+ * @param {McpExecutionContext} context
+ * @param {Record<string, string>} injectMap
+ * @param {string[]} [hideFromSchema]
+ */
+function applyContextInjection(toolArguments, context, injectMap, hideFromSchema = []) {
+  const hidden = new Set(hideFromSchema);
+  const result = { ...toolArguments };
+
+  for (const [toolParam, contextField] of Object.entries(injectMap)) {
+    const value = context[contextField];
+    if (value == null) {
+      continue;
+    }
+    if (result[toolParam] != null && result[toolParam] !== "") {
+      continue;
+    }
+    result[toolParam] = value;
+  }
+
+  for (const key of hidden) {
+    if (result[key] == null || result[key] === "") {
+      delete result[key];
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Resolve datasource context and inject into MCP tool arguments.
+ * @param {object} params
+ * @param {string} params.serverName
+ * @param {Record<string, unknown>} params.toolArguments
+ * @param {import('@langchain/core/runnables').RunnableConfig['configurable']} [params.configurable]
+ * @param {Record<string, unknown>} [params.mcpConfig]
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function resolveAndInjectMcpContext({
+  serverName,
+  toolArguments,
+  configurable,
+  mcpConfig,
+}) {
+  const rules = getContextInjectionConfig(serverName, mcpConfig);
+  if (!rules) {
+    return toolArguments;
+  }
+
+  const args =
+    typeof toolArguments === "string"
+      ? (() => {
+          try {
+            return JSON.parse(toolArguments);
+          } catch {
+            return { input: toolArguments };
+          }
+        })()
+      : { ...toolArguments };
+
+  const context = await resolveMcpExecutionContext({
+    resolveSources: rules.resolve,
+    configurable,
+  });
+
+  if (!context) {
+    logger.warn(
+      `[MCP][${serverName}] No datasource context resolved. Select a datasource or bind one to the agent.`,
+    );
+    return args;
+  }
+
+  logger.info(
+    `[MCP][${serverName}] Context resolved (source=${context.source}): projectId=${context.projectId}, datasourceId=${context.datasourceId}`,
+  );
+
+  const userId = configurable?.user?.id || configurable?.user_id;
+  const conversationId = configurable?.requestBody?.conversationId;
+  if (context.source === "requestBody" && userId && conversationId) {
+    persistConversationMcpContext({ userId, conversationId, context });
+  }
+
+  return applyContextInjection(
+    args,
+    context,
+    rules.inject,
+    rules.hideFromSchema,
+  );
+}
+
+module.exports = {
+  DEFAULT_CONTEXT_INJECTION,
+  getContextInjectionConfig,
+  stripHiddenParamsFromSchema,
+  resolveAndInjectMcpContext,
+  resolveMcpExecutionContext,
+  applyContextInjection,
+  lookupDatasource,
+};

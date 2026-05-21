@@ -32,6 +32,38 @@ mcpServers:
     startup: false
     timeout: 120000
     customUserVars: {}
+  # ---------------------------------------------------------------------------
+  # MCP 执行上下文自动注入（contextInjection）
+  # 作用：调用 MCP 工具前，由后端自动填入 projectId / datasourceId，模型无需传参。
+  # 实现：api/server/services/McpContextResolver.js
+  #
+  # resolve  — 按顺序解析数据源上下文，命中即停止：
+  #   conversation  读取当前会话 agentOptions.mcpContext（多轮对话持久化）
+  #   requestBody   读取聊天请求体字段（如前端选择的 datasourceId）
+  #   agentBinding  按智能体名称在 DatDatasource.agentNames 中查找绑定数据源
+  #
+  # inject   — 将解析结果映射到 MCP 工具参数名（左=工具参数，右=上下文字段）
+  # hideFromSchema — 从工具 JSON Schema 中隐藏这些参数，避免模型自行填写
+  # ---------------------------------------------------------------------------
+  becauseai-server:
+    type: sse
+    url: http://127.0.0.1:8081/sse
+    chatMenu: false
+    startup: false
+    customUserVars: {}
+    timeout: 1200000
+    contextInjection:
+      resolve:
+        - from: conversation # 优先：本会话已缓存的数据源
+        - from: requestBody
+          field: datasourceId # 其次：前端本次请求传入的数据源 ID
+        - from: agentBinding # 兜底：智能体绑定的默认数据源
+      inject:
+        arg1: projectId # becauseai-server 约定 arg1 = 项目 ID
+        arg2: datasourceId # becauseai-server 约定 arg2 = 数据源 ID
+      hideFromSchema:
+        - arg1
+        - arg2
 interface:
   customWelcome: 欢迎来到 每日AI朋友圈！祝您体验愉快。
   defaultEndpoint: deepseek

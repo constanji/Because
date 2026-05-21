@@ -30,6 +30,11 @@ const { reinitMCPServer } = require("./Tools/mcp");
 const { getAppConfig } = require("./Config");
 const { getLogStores } = require("~/cache");
 const { mcpServersRegistry } = require("@because/api");
+const {
+  getContextInjectionConfig,
+  stripHiddenParamsFromSchema,
+  resolveAndInjectMcpContext,
+} = require("./McpContextResolver");
 
 /**
  * @param {object} params
@@ -345,7 +350,14 @@ function createToolInstance({
   const { description, parameters } = toolDefinition;
   const isGoogle =
     _provider === Providers.VERTEXAI || _provider === Providers.GOOGLE;
-  let schema = convertWithResolvedRefs(parameters, {
+
+  const injectionConfig = getContextInjectionConfig(serverName);
+  const parametersForSchema = stripHiddenParamsFromSchema(
+    parameters,
+    injectionConfig?.hideFromSchema,
+  );
+
+  let schema = convertWithResolvedRefs(parametersForSchema, {
     allowEmptyObject: !isGoogle,
     transformOneOfAnyOf: true,
   });
@@ -407,89 +419,13 @@ function createToolInstance({
         `${Constants.mcp_prefix}${serverName}`
         ];
 
-      // Inject projectId (arg1) and datasourceId (arg2) for becauseai-server MCP
-      // Get datasourceId from requestBody (passed from frontend selection)
-      let finalToolArguments = toolArguments;
-      if (serverName === "becauseai-server") {
-        const datasourceId = config?.configurable?.requestBody?.datasourceId;
-        logger.info(
-          `[MCP][becauseai-server] Processing tool call, datasourceId from requestBody: ${datasourceId}`,
-        );
-
-        if (datasourceId) {
-          try {
-            // Get datasource info from database to get projectId
-            const { getDatDatasourceModel } = require("~/models/DatDatasource");
-            const DatDatasource = await getDatDatasourceModel();
-            const dataSource = await DatDatasource.findById(datasourceId).lean();
-
-            if (dataSource && dataSource.projectId) {
-              finalToolArguments = {
-                ...toolArguments,
-                arg1: dataSource.projectId,
-                arg2: datasourceId,
-              };
-              logger.info(
-                `[MCP][becauseai-server] Injected: projectId(arg1)=${dataSource.projectId}, datasourceId(arg2)=${datasourceId}`,
-              );
-            } else {
-              logger.warn(
-                `[MCP][becauseai-server] Datasource ${datasourceId} not found or missing projectId`,
-              );
-            }
-          } catch (error) {
-            logger.error(
-              `[MCP][becauseai-server] Error looking up datasource ${datasourceId}:`,
-              error,
-            );
-          }
-        } else {
-          logger.warn(
-            `[MCP][becauseai-server] No datasourceId available in requestBody. Please select a datasource from the business list.`,
-          );
-        }
-      }
-
-
-      if (serverName === "analysis-server") {
-        const datasourceId = config?.configurable?.requestBody?.datasourceId;
-        logger.info(
-          `[MCP][analysis-server] Processing tool call, datasourceId from requestBody: ${datasourceId}`,
-        );
-
-        if (datasourceId) {
-          try {
-            // Get datasource info from database to get projectId
-            const { getDatDatasourceModel } = require("~/models/DatDatasource");
-            const DatDatasource = await getDatDatasourceModel();
-            const dataSource = await DatDatasource.findById(datasourceId).lean();
-
-            if (dataSource && dataSource.projectId) {
-              finalToolArguments = {
-                ...toolArguments,
-                projectId: dataSource.projectId,
-                datasourceId: datasourceId,
-              };
-              logger.info(
-                `[MCP][analysis-server] Injected: projectId=${dataSource.projectId}, datasourceId=${datasourceId}`,
-              );
-            } else {
-              logger.warn(
-                `[MCP][analysis-server] Datasource ${datasourceId} not found or missing projectId`,
-              );
-            }
-          } catch (error) {
-            logger.error(
-              `[MCP][analysis-server] Error looking up datasource ${datasourceId}:`,
-              error,
-            );
-          }
-        } else {
-          logger.warn(
-            `[MCP][analysis-server] No datasourceId available in requestBody. Please select a datasource from the business list.`,
-          );
-        }
-      }
+      const appConfig = await getAppConfig();
+      const finalToolArguments = await resolveAndInjectMcpContext({
+        serverName,
+        toolArguments,
+        configurable: config?.configurable,
+        mcpConfig: appConfig?.mcpConfig,
+      });
 
       const result = await mcpManager.callTool({
         serverName,

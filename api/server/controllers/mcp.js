@@ -108,6 +108,7 @@ const getMCPTools = async (req, res) => {
               name: toolName,
               pluginKey: toolKey,
               description: toolData.function.description || '',
+              inputSchema: toolData.function.parameters,
             });
           }
         }
