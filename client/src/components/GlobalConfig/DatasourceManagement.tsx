@@ -155,6 +155,64 @@ export default function DatasourceManagement() {
     "schema",
   );
 
+  // ====== Table Selection Modal State ======
+  const [tableSelectMode, setTableSelectMode] = useState<"schema" | "cells">("schema");
+  const [tableSelectVisible, setTableSelectVisible] = useState(false);
+  const [tableSelectLoading, setTableSelectLoading] = useState(false);
+  const [allTables, setAllTables] = useState<string[]>([]);
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
+  const [tableSelectSearch, setTableSelectSearch] = useState("");
+  const [cellGeneratedTables, setCellGeneratedTables] = useState<Set<string>>(new Set());
+
+  const generatedTableNames = useMemo(() => {
+    return new Set(schemas.map((s) => s.tableName));
+  }, [schemas]);
+
+  const activeGeneratedSet = useMemo(() => {
+    return tableSelectMode === "cells" ? cellGeneratedTables : generatedTableNames;
+  }, [tableSelectMode, cellGeneratedTables, generatedTableNames]);
+
+  const filteredAllTables = useMemo(() => {
+    if (!tableSelectSearch) return allTables;
+    const kw = tableSelectSearch.toLowerCase();
+    return allTables.filter((t) => t.toLowerCase().includes(kw));
+  }, [allTables, tableSelectSearch]);
+
+  const allSelectedInFilter = useMemo(() => {
+    if (filteredAllTables.length === 0) return false;
+    return filteredAllTables.every((t) => selectedTables.includes(t));
+  }, [filteredAllTables, selectedTables]);
+
+  const indeterminateInFilter = useMemo(() => {
+    const matched = filteredAllTables.filter((t) => selectedTables.includes(t));
+    return matched.length > 0 && matched.length < filteredAllTables.length;
+  }, [filteredAllTables, selectedTables]);
+
+  const toggleSelectAllFiltered = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        const merged = new Set([...selectedTables, ...filteredAllTables]);
+        setSelectedTables(Array.from(merged));
+      } else {
+        setSelectedTables(selectedTables.filter((t) => !filteredAllTables.includes(t)));
+      }
+    },
+    [selectedTables, filteredAllTables]
+  );
+
+  const toggleTableSelection = useCallback(
+    (tableName: string) => {
+      setSelectedTables((prev) => {
+        if (prev.includes(tableName)) {
+          return prev.filter((t) => t !== tableName);
+        } else {
+          return [...prev, tableName];
+        }
+      });
+    },
+    []
+  );
+
   // Prompts management state
   const [prompts, setPrompts] = useState<DatasourcePrompt[]>([]);
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
@@ -247,28 +305,7 @@ export default function DatasourceManagement() {
 
   // Fetch Light Schemas for a datasource
   const fetchLightSchemas = useCallback(
-    async (projectId: string, datasourceId: string, forceRefresh = false) => {
-      const cacheKey = `DAT_LIGHT_SCHEMA_${datasourceId}`;
-
-      // 如果不是强制刷新，且存在缓存数据，优先使用缓存
-      if (!forceRefresh) {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          try {
-            const parsedCache = JSON.parse(cached);
-            if (Array.isArray(parsedCache) && parsedCache.length > 0) {
-              setSchemas(parsedCache);
-              if (!selectedTableName) {
-                setSelectedTableName(parsedCache[0].tableName);
-              }
-              return;
-            }
-          } catch (e) {
-            // ignore parsing error
-          }
-        }
-      }
-
+    async (projectId: string, datasourceId: string) => {
       try {
         setIsLoadingSchema(true);
         const response = await fetch(
@@ -282,11 +319,6 @@ export default function DatasourceManagement() {
         if (data && data.length > 0 && !selectedTableName) {
           setSelectedTableName(data[0].tableName);
         }
-
-        // 写入缓存
-        if (data && Array.isArray(data)) {
-          localStorage.setItem(cacheKey, JSON.stringify(data));
-        }
       } catch (error) {
         console.error("Failed to load schemas:", error);
         setSchemas([]);
@@ -297,69 +329,150 @@ export default function DatasourceManagement() {
     [selectedTableName],
   );
 
-  // Generate Light Schema
-  const handleGenerateSchema = useCallback(async () => {
-    if (!viewingDatasource?.projectId) {
-      showToast({ message: "数据源尚未关联项目", status: "warning" });
-      return;
-    }
-    setIsProcessing(true);
-    try {
-      const response = await fetch(
-        `${DAT_API_BASE}/api/v1/content-store/light-schema/generate?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`,
-        { method: "POST" },
-      );
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+  // ====== Table Selection Dialog Open Logic ======
+  const openTableSelector = useCallback(
+    async (mode: "schema" | "cells") => {
+      if (!viewingDatasource?.projectId) {
+        showToast({ message: "数据源尚未关联项目", status: "warning" });
+        return;
       }
-      const result = await response.text();
-      showToast({
-        message: result || "生成 Light Schema 成功",
-        status: "success",
-      });
-      await fetchLightSchemas(
-        viewingDatasource.projectId,
-        viewingDatasource._id,
-        true,
-      );
-    } catch (error) {
-      showToast({
-        message: `生成 Light Schema 失败: ${error instanceof Error ? error.message : "未知错误"}`,
-        status: "error",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [viewingDatasource, showToast, fetchLightSchemas]);
+      setTableSelectMode(mode);
+      setTableSelectVisible(true);
+      setTableSelectSearch("");
+      setTableSelectLoading(true);
+      try {
+        const tablesRes = await fetch(
+          `${DAT_API_BASE}/api/v1/content-store/datasource/tables?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`
+        );
+        if (!tablesRes.ok) {
+          throw new Error(`获取数据表失败 status: ${tablesRes.status}`);
+        }
+        const tables: string[] = await tablesRes.json();
+        setAllTables(tables || []);
 
-  // Vectorize Cells
-  const handleVectorizeCells = useCallback(async () => {
-    if (!viewingDatasource?.projectId) {
-      showToast({ message: "数据源尚未关联项目", status: "warning" });
+        let currentCellGenerated = new Set<string>();
+        if (mode === "cells") {
+          try {
+            const cellTabsRes = await fetch(
+              `${DAT_API_BASE}/api/v1/content-store/cells/tables?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`
+            );
+            if (cellTabsRes.ok) {
+              const cellTabs: string[] = await cellTabsRes.json();
+              currentCellGenerated = new Set(cellTabs || []);
+              setCellGeneratedTables(currentCellGenerated);
+            } else {
+              setCellGeneratedTables(new Set());
+            }
+          } catch (e) {
+            setCellGeneratedTables(new Set());
+            console.warn("Failed to load cell tables:", e);
+          }
+        }
+
+        const already = mode === "cells" ? currentCellGenerated : generatedTableNames;
+        const remaining = (tables || []).filter((t) => !already.has(t));
+        setSelectedTables(remaining.length > 0 ? remaining : [...(tables || [])]);
+      } catch (error) {
+        showToast({
+          message: `加载表列表失败: ${error instanceof Error ? error.message : "未知错误"}`,
+          status: "error",
+        });
+        setTableSelectVisible(false);
+      } finally {
+        setTableSelectLoading(false);
+      }
+    },
+    [viewingDatasource, generatedTableNames, showToast]
+  );
+
+  const handleGenerateSchema = useCallback(() => {
+    openTableSelector("schema");
+  }, [openTableSelector]);
+
+  const handleVectorizeCells = useCallback(() => {
+    openTableSelector("cells");
+  }, [openTableSelector]);
+
+  const confirmTableSelection = useCallback(async () => {
+    if (!viewingDatasource) return;
+    if (selectedTables.length === 0) {
+      showToast({ message: "请至少选择一张表", status: "warning" });
       return;
     }
+
+    const projectId = viewingDatasource.projectId;
+    const datasourceId = viewingDatasource._id;
+    const isAll = selectedTables.length === allTables.length;
+    const payloadTables = isAll ? null : [...selectedTables];
+
     setIsProcessing(true);
     try {
-      const response = await fetch(
-        `${DAT_API_BASE}/api/v1/content-store/cells/vectorize?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`,
-        { method: "POST" },
-      );
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      if (tableSelectMode === "schema") {
+        const response = await fetch(
+          `${DAT_API_BASE}/api/v1/content-store/light-schema/generate?projectId=${projectId}&datasourceId=${datasourceId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              concurrencyLimit: 5,
+              tableNames: payloadTables,
+              runInSeparateTask: true,
+            }),
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP error! status: ${response.status}`);
+        }
+        const result = await response.text();
+        showToast({
+          message: result || "生成 Light Schema 成功",
+          status: "success",
+        });
+        await fetchLightSchemas(projectId, datasourceId);
+      } else {
+        const response = await fetch(
+          `${DAT_API_BASE}/api/v1/content-store/cells/vectorize?projectId=${projectId}&datasourceId=${datasourceId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              batchSize: 100,
+              tableNames: payloadTables,
+            }),
+          }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP error! status: ${response.status}`);
+        }
+        const result = await response.text();
+        showToast({
+          message: result || "向量化单元格成功",
+          status: "success",
+        });
       }
-      const result = await response.text();
-      showToast({ message: result || "向量化单元格成功", status: "success" });
+      setTableSelectVisible(false);
     } catch (error) {
       showToast({
-        message: `向量化失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        message: `${tableSelectMode === "schema" ? "生成 Light Schema 失败" : "向量化失败"}: ${error instanceof Error ? error.message : "未知错误"}`,
         status: "error",
       });
     } finally {
       setIsProcessing(false);
     }
-  }, [viewingDatasource, showToast]);
+  }, [
+    viewingDatasource,
+    selectedTables,
+    allTables,
+    tableSelectMode,
+    fetchLightSchemas,
+    showToast,
+  ]);
 
   // Clear Preprocessing Data
   const handleClearPreprocessing = useCallback(async () => {
@@ -1832,6 +1945,144 @@ export default function DatasourceManagement() {
                   )}
                 </div>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====== Table Selection Modal ====== */}
+      {tableSelectVisible && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-border-light bg-surface-primary shadow-lg flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border-light p-4">
+              <h3 className="text-lg font-semibold text-text-primary">
+                {tableSelectMode === "schema"
+                  ? "选择要生成 Light Schema 的表"
+                  : "选择要向量化单元格的表"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setTableSelectVisible(false)}
+                className="rounded p-1 text-text-secondary hover:bg-surface-hover"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {tableSelectLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="h-6 w-6 animate-spin text-text-tertiary" />
+                </div>
+              ) : (
+                <>
+                  {tableSelectMode === "schema" && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 p-3 flex gap-2">
+                      <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="font-medium text-xs text-blue-700 dark:text-blue-400">
+                          只覆盖选中的表
+                        </h5>
+                        <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">
+                          未选中的表不会受影响。默认勾选当前未生成过的表（增量更新）。
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+                    <input
+                      type="text"
+                      placeholder="搜索表名…"
+                      value={tableSelectSearch}
+                      onChange={(e) => setTableSelectSearch(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-4 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Toolbar */}
+                  <div className="flex items-center justify-between text-sm py-1 border-b border-border-light">
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-text-secondary select-none">
+                      <input
+                        type="checkbox"
+                        checked={allSelectedInFilter}
+                        ref={(el) => {
+                          if (el) {
+                            el.indeterminate = indeterminateInFilter;
+                          }
+                        }}
+                        onChange={(e) => toggleSelectAllFiltered(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      全选当前列表 ({filteredAllTables.length})
+                    </label>
+                    <span className="text-xs text-text-tertiary">
+                      已选 {selectedTables.length} / {allTables.length}
+                    </span>
+                  </div>
+
+                  {/* List of tables */}
+                  <div className="max-h-[30vh] overflow-y-auto space-y-2 pr-1">
+                    {filteredAllTables.length === 0 ? (
+                      <div className="text-center py-6 text-sm text-text-tertiary">
+                        未匹配到表
+                      </div>
+                    ) : (
+                      filteredAllTables.map((tableName) => {
+                        const isSelected = selectedTables.includes(tableName);
+                        const isAlreadyGenerated = activeGeneratedSet.has(tableName);
+                        return (
+                          <div
+                            key={tableName}
+                            className="flex items-center justify-between p-2 rounded hover:bg-surface-hover transition-colors"
+                          >
+                            <label className="flex items-center gap-2 cursor-pointer text-sm text-text-primary flex-1 select-none">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleTableSelection(tableName)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="font-mono">{tableName}</span>
+                            </label>
+                            {isAlreadyGenerated && (
+                              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                {tableSelectMode === "cells" ? "已向量化" : "已生成"}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 border-t border-border-light p-4">
+              <Button
+                type="button"
+                onClick={() => setTableSelectVisible(false)}
+                className="btn btn-neutral rounded-lg px-4 py-2"
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmTableSelection}
+                disabled={isProcessing || tableSelectLoading}
+                className="btn btn-primary rounded-lg px-4 py-2 flex items-center"
+              >
+                {isProcessing && (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                确认执行
+              </Button>
             </div>
           </div>
         </div>

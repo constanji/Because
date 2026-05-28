@@ -158,7 +158,7 @@ class BenchmarkService {
         } catch (error) {
           const itemDuration = Date.now() - itemStartTime;
           pushLog(`[BenchmarkService] 第 ${i + 1}/${dataset.length} 题失败 question_id=${item.question_id}: ${error.message}`);
-          predictions.push({ index: i, db_id: item.db_id, sql: null, error: error.message });
+          predictions.push({ index: i, db_id: item.db_id, sql: null, error: error.message, duration: itemDuration });
           task.completed = i + 1;
           task.progress = Math.round(((i + 1) / dataset.length) * 50);
           task.lastCompletedItem = item.question_id || `item_${i + 1}`;
@@ -707,6 +707,23 @@ ${evidence ? `外部知识: ${evidence}` : ''}
         )
         .join('\n') + '\n';
     await fs.writeFile(diffJsonlPath, diffJsonlContent);
+
+    // 保存详细信息预测文件，包括耗时、问题、回答等
+    const detailedPredictions = predictions.map((pred) => {
+      const datasetItem = dataset[pred.index] || {};
+      return {
+        index: pred.index,
+        question_id: pred.question_id || datasetItem.question_id,
+        db_id: pred.db_id,
+        question: datasetItem.question || datasetItem.query || '',
+        predictedSQL: pred.sql ? pred.sql.split('\t----- bird -----\t')[0].trim() : '',
+        groundTruthSQL: datasetItem.SQL ? datasetItem.SQL.trim() : '',
+        duration: pred.duration || 0,
+        error: pred.error || null,
+      };
+    });
+    const detailedFilePath = path.join(resultsDir, `${taskId}_predictions_detailed.json`);
+    await fs.writeFile(detailedFilePath, JSON.stringify(detailedPredictions, null, 2));
 
     return { predictions: filePath, groundTruth: groundTruthPath, diffJsonl: diffJsonlPath };
   }

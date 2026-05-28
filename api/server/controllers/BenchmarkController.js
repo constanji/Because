@@ -314,6 +314,102 @@ class BenchmarkController {
     }
   }
 
+  static async getTaskDetails(req, res) {
+    try {
+      const fs = require('fs');
+      const { taskId } = req.params;
+      const resultsDir = getResultsDir();
+      
+      let task = tasks.get(taskId);
+      if (!task) {
+        task = BenchmarkController.restoreTaskFromFiles(taskId);
+        if (task) tasks.set(taskId, task);
+      }
+
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+
+      // Check if detailed predictions exist
+      const detailedPath = path.join(resultsDir, `${taskId}_predictions_detailed.json`);
+      let details = [];
+
+      if (fs.existsSync(detailedPath)) {
+        details = JSON.parse(fs.readFileSync(detailedPath, 'utf-8'));
+      } else {
+        // Fallback: reconstruct from predictions, ground truth, and dataset
+        const predictionsPath = path.join(resultsDir, `${taskId}_predictions.json`);
+        const groundTruthPath = path.join(resultsDir, `${taskId}_ground_truth.sql`);
+
+        if (fs.existsSync(predictionsPath) && fs.existsSync(groundTruthPath)) {
+          const predictions = JSON.parse(fs.readFileSync(predictionsPath, 'utf-8'));
+          const groundTruthLines = fs.readFileSync(groundTruthPath, 'utf-8').split('\n').filter((line) => line.trim());
+          const groundTruth = groundTruthLines.map((line, index) => {
+            const parts = line.split('\t');
+            return { index: index.toString(), sql: parts[0] || '', db_id: parts[1] || '' };
+          });
+
+          // Try to load original dataset to get the questions
+          let dataset = [];
+          try {
+            const isCustom = task.config.benchmarkMode === 'custom';
+            if (isCustom) {
+              const datasetPath = path.join(getCustomDatasetsDir(), `${task.config.customDatasetId}.json`);
+              if (fs.existsSync(datasetPath)) {
+                dataset = JSON.parse(fs.readFileSync(datasetPath, 'utf-8'));
+              }
+            } else {
+              const datasetPath = path.join(getBenchmarkRoot(), 'data', task.config.datasetId.endsWith('.json') ? task.config.datasetId : `mini_dev_${task.config.sqlDialect.toLowerCase()}.json`);
+              if (fs.existsSync(datasetPath)) {
+                let fullDataset = JSON.parse(fs.readFileSync(datasetPath, 'utf-8'));
+                if (task.config.databaseName) {
+                  dataset = fullDataset.filter((item) => item.db_id === task.config.databaseName);
+                } else {
+                  dataset = fullDataset;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to load dataset for fallback question retrieval:', e);
+          }
+
+          details = Object.keys(predictions)
+            .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
+            .map((indexStr) => {
+              const index = parseInt(indexStr, 10);
+              const predictedSQL = predictions[indexStr];
+              const predictedSQLClean = predictedSQL.split('\t----- bird -----\t')[0] || predictedSQL;
+              const groundTruthItem = groundTruth[index];
+              const datasetItem = dataset[index] || {};
+
+              return {
+                index,
+                question_id: datasetItem.question_id || `item_${index + 1}`,
+                db_id: groundTruthItem ? groundTruthItem.db_id : '',
+                question: datasetItem.question || datasetItem.query || '',
+                predictedSQL: predictedSQLClean.trim(),
+                groundTruthSQL: groundTruthItem ? groundTruthItem.sql.trim() : '',
+                duration: 0, // Fallback duration
+              };
+            });
+        }
+      }
+
+      res.json({
+        taskId: task.taskId,
+        status: task.status,
+        results: task.results,
+        config: task.config,
+        completedAt: task.completedAt,
+        totalDuration: getTotalDuration(task),
+        details,
+      });
+    } catch (error) {
+      console.error('Error getting task details:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   static restoreTaskFromFiles(taskId) {
     const fs = require('fs');
     const resultsDir = getResultsDir();
