@@ -148,6 +148,7 @@ const startServer = async () => {
   app.use('/api/dat-projects', routes.datProjects);
   app.use('/api/dat-datasources', routes.datDatasources);
   app.use('/api/datasource-prompts', routes.datasourcePrompts);
+  app.use('/api/benchmark', routes.benchmark);
 
   app.use(ErrorController);
 

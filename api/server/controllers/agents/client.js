@@ -844,6 +844,11 @@ class AgentClient extends BaseClient {
       /** @type {AppConfig['endpoints']['agents']} */
       const agentsEConfig = appConfig.endpoints?.[EModelEndpoint.agents];
 
+      const _body = this.options.req.body;
+      logger.info('[MCP][debug] req.body keys: ' + JSON.stringify(Object.keys(_body || {})));
+      logger.info('[MCP][debug] endpointOption.datasourceId: ' + _body?.endpointOption?.datasourceId);
+      logger.info('[MCP][debug] body.datasourceId: ' + _body?.datasourceId);
+
       config = {
         runName: 'AgentRun',
         configurable: {

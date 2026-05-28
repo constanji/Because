@@ -351,7 +351,7 @@ function createToolInstance({
   const isGoogle =
     _provider === Providers.VERTEXAI || _provider === Providers.GOOGLE;
 
-  const injectionConfig = getContextInjectionConfig(serverName);
+  const injectionConfig = getContextInjectionConfig(serverName, undefined, toolName);
   const parametersForSchema = stripHiddenParamsFromSchema(
     parameters,
     injectionConfig?.hideFromSchema,
@@ -422,10 +422,15 @@ function createToolInstance({
       const appConfig = await getAppConfig();
       const finalToolArguments = await resolveAndInjectMcpContext({
         serverName,
+        toolName,
         toolArguments,
         configurable: config?.configurable,
         mcpConfig: appConfig?.mcpConfig,
       });
+
+      logger.info(
+        `[MCP][${serverName}][${toolName}] Final tool arguments: ${JSON.stringify(finalToolArguments)}`,
+      );
 
       const result = await mcpManager.callTool({
         serverName,

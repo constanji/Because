@@ -31,6 +31,7 @@ const datProjects = require("./datProjects");
 const datDatasources = require("./datDatasources");
 const datasourcePrompts = require("./datasourcePrompts");
 const optimize = require("./optimize");
+const benchmark = require("./benchmark");
 
 module.exports = {
   mcp,
@@ -66,4 +67,5 @@ module.exports = {
   datDatasources,
   datasourcePrompts,
   optimize,
+  benchmark,
 };

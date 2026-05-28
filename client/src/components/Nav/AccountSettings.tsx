@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import * as Select from '@ariakit/react/select';
 import {
   Database,
+  Activity,
   FileText,
   LogOut,
   Settings as SettingsIcon,
@@ -122,6 +123,14 @@ function AccountSettings() {
             >
               <Database className="icon-md" aria-hidden="true" />
               项目管理
+            </Select.SelectItem>
+            <Select.SelectItem
+              value=""
+              onClick={() => navigate("/benchmark")}
+              className="select-item text-sm"
+            >
+              <Activity className="icon-md" aria-hidden="true" />
+              基准测试
             </Select.SelectItem>
           </>
         )}

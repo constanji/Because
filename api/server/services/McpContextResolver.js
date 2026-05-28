@@ -4,19 +4,36 @@ const { getConvo } = require("~/models/Conversation");
 const { Conversation } = require("~/db/models");
 const { getDataSourceByAgentId } = require("~/server/services/DataSource");
 
-/** @type {Record<string, import('./McpContextResolver').ContextInjectionConfig>} */
+/** @type {Record<string, import('./McpContextResolver').ContextInjectionConfig | Record<string, import('./McpContextResolver').ContextInjectionConfig>>} */
 const DEFAULT_CONTEXT_INJECTION = {
   "becauseai-server": {
-    resolve: [
-      { from: "conversation" },
-      { from: "requestBody", field: "datasourceId" },
-      { from: "agentBinding" },
-    ],
-    inject: {
-      arg1: "projectId",
-      arg2: "datasourceId",
+    ask_data: {
+      resolve: [
+        { from: "conversation" },
+        { from: "requestBody", field: "datasourceId" },
+        { from: "agentBinding" },
+      ],
+      inject: {
+        projectId: "projectId",
+        arg1: "projectId",
+        arg2: "datasourceId",
+        arg4: "question",
+      },
+      hideFromSchema: ["projectId", "arg1", "arg2"],
     },
-    hideFromSchema: ["arg1", "arg2"],
+    agents: {
+      resolve: [
+        { from: "conversation" },
+        { from: "requestBody", field: "datasourceId" },
+        { from: "agentBinding" },
+      ],
+      inject: {
+        projectId: "projectId",
+        arg1: "projectId",
+        datasourceId: "datasourceId",
+      },
+      hideFromSchema: ["projectId", "arg1", "datasourceId"],
+    },
   },
   "analysis-server": {
     resolve: [
@@ -45,14 +62,29 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 /**
  * @param {string} serverName
  * @param {Record<string, unknown> | undefined} mcpConfig
+ * @param {string} [toolName]
  * @returns {ContextInjectionConfig | null}
  */
-function getContextInjectionConfig(serverName, mcpConfig) {
+function getContextInjectionConfig(serverName, mcpConfig, toolName) {
   const fromConfig = mcpConfig?.[serverName]?.contextInjection;
+  if (toolName && fromConfig?.[toolName]?.inject && fromConfig?.[toolName]?.resolve) {
+    return fromConfig[toolName];
+  }
   if (fromConfig?.inject && fromConfig?.resolve) {
     return fromConfig;
   }
-  return DEFAULT_CONTEXT_INJECTION[serverName] ?? null;
+
+  const defaults = DEFAULT_CONTEXT_INJECTION[serverName];
+  if (!defaults) {
+    return null;
+  }
+  if (toolName && defaults[toolName]?.inject && defaults[toolName]?.resolve) {
+    return defaults[toolName];
+  }
+  if (defaults.inject && defaults.resolve) {
+    return defaults;
+  }
+  return null;
 }
 
 /**
@@ -97,6 +129,11 @@ async function lookupDatasource(datasourceId) {
 
   const DatDatasource = await getDatDatasourceModel();
   const dataSource = await DatDatasource.findById(datasourceId).lean();
+  if (dataSource) {
+    logger.info(
+      `[McpContext] Datasource ${datasourceId}: provider=${dataSource.provider}, configurationKeys=${JSON.stringify(Object.keys(dataSource.configuration || {}))}`,
+    );
+  }
   if (!dataSource?.projectId) {
     return null;
   }
@@ -220,10 +257,16 @@ function persistConversationMcpContext({ userId, conversationId, context }) {
 function applyContextInjection(toolArguments, context, injectMap, hideFromSchema = []) {
   const hidden = new Set(hideFromSchema);
   const result = { ...toolArguments };
+  const question =
+    result.arg4 ??
+    result.question ??
+    result.query ??
+    result.prompt ??
+    result.input;
 
   for (const [toolParam, contextField] of Object.entries(injectMap)) {
-    const value = context[contextField];
-    if (value == null) {
+    const value = contextField === "question" ? question : context[contextField];
+    if (value == null || value === "") {
       continue;
     }
     if (result[toolParam] != null && result[toolParam] !== "") {
@@ -245,6 +288,7 @@ function applyContextInjection(toolArguments, context, injectMap, hideFromSchema
  * Resolve datasource context and inject into MCP tool arguments.
  * @param {object} params
  * @param {string} params.serverName
+ * @param {string} [params.toolName]
  * @param {Record<string, unknown>} params.toolArguments
  * @param {import('@langchain/core/runnables').RunnableConfig['configurable']} [params.configurable]
  * @param {Record<string, unknown>} [params.mcpConfig]
@@ -252,11 +296,12 @@ function applyContextInjection(toolArguments, context, injectMap, hideFromSchema
  */
 async function resolveAndInjectMcpContext({
   serverName,
+  toolName,
   toolArguments,
   configurable,
   mcpConfig,
 }) {
-  const rules = getContextInjectionConfig(serverName, mcpConfig);
+  const rules = getContextInjectionConfig(serverName, mcpConfig, toolName);
   if (!rules) {
     return toolArguments;
   }

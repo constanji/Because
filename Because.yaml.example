@@ -53,17 +53,34 @@ mcpServers:
     customUserVars: {}
     timeout: 1200000
     contextInjection:
-      resolve:
-        - from: conversation # 优先：本会话已缓存的数据源
-        - from: requestBody
-          field: datasourceId # 其次：前端本次请求传入的数据源 ID
-        - from: agentBinding # 兜底：智能体绑定的默认数据源
-      inject:
-        arg1: projectId # becauseai-server 约定 arg1 = 项目 ID
-        arg2: datasourceId # becauseai-server 约定 arg2 = 数据源 ID
-      hideFromSchema:
-        - arg1
-        - arg2
+      ask_data:
+        resolve:
+          - from: conversation # 优先：本会话已缓存的数据源
+          - from: requestBody
+            field: datasourceId # 其次：前端本次请求传入的数据源 ID
+          - from: agentBinding # 兜底：智能体绑定的默认数据源
+        inject:
+          projectId: projectId # becauseai-server ask_data 需要显式 projectId
+          arg1: projectId # becauseai-server ask_data 兼容旧版参数位
+          arg2: datasourceId # becauseai-server ask_data 约定 arg2 = 数据源 ID
+          arg4: question # becauseai-server ask_data 约定 arg4 = 用户问题
+        hideFromSchema:
+          - arg1
+          - arg2
+      agents:
+        resolve:
+          - from: conversation
+          - from: requestBody
+            field: datasourceId
+          - from: agentBinding
+        inject:
+          projectId: projectId # becauseai-server agents 新版使用语义化参数名
+          arg1: projectId # 兼容旧版 agents 参数位
+          datasourceId: datasourceId
+        hideFromSchema:
+          - projectId
+          - arg1
+          - datasourceId
 interface:
   customWelcome: 欢迎来到 每日AI朋友圈！祝您体验愉快。
   defaultEndpoint: deepseek

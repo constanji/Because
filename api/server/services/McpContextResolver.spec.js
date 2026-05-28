@@ -6,13 +6,29 @@ const {
 
 describe("McpContextResolver", () => {
   describe("getContextInjectionConfig", () => {
-    it("returns default config for becauseai-server", () => {
-      const config = getContextInjectionConfig("becauseai-server");
-      expect(config?.inject).toEqual({ arg1: "projectId", arg2: "datasourceId" });
+    it("returns tool-specific default config for becauseai-server ask_data", () => {
+      const config = getContextInjectionConfig("becauseai-server", undefined, "ask_data");
+      expect(config?.inject).toEqual({ arg1: "projectId", arg2: "datasourceId", arg4: "question" });
       expect(config?.hideFromSchema).toContain("arg1");
     });
 
-    it("prefers mcpConfig override when provided", () => {
+    it("prefers tool-specific mcpConfig override when provided", () => {
+      const custom = {
+        "custom-server": {
+          contextInjection: {
+            run: {
+              resolve: [{ from: "requestBody", field: "datasourceId" }],
+              inject: { foo: "projectId" },
+              hideFromSchema: ["foo"],
+            },
+          },
+        },
+      };
+      const config = getContextInjectionConfig("custom-server", custom, "run");
+      expect(config?.inject).toEqual({ foo: "projectId" });
+    });
+
+    it("prefers server-level mcpConfig override when provided", () => {
       const custom = {
         "custom-server": {
           contextInjection: {
@@ -56,6 +72,19 @@ describe("McpContextResolver", () => {
       expect(args.arg1).toBe("user-set");
       expect(args.arg2).toBe("d1");
       expect(args.query).toBe("sales");
+    });
+
+    it("maps question-like fields to arg4 when configured", () => {
+      const args = applyContextInjection(
+        { question: "how many accounts" },
+        { projectId: "p1", datasourceId: "d1" },
+        { arg1: "projectId", arg2: "datasourceId", arg4: "question" },
+        ["arg1", "arg2"],
+      );
+      expect(args.arg1).toBe("p1");
+      expect(args.arg2).toBe("d1");
+      expect(args.arg4).toBe("how many accounts");
+      expect(args.question).toBe("how many accounts");
     });
   });
 });

@@ -106,6 +106,7 @@ export type MCPTool = {
   name: string;
   pluginKey: string;
   description: string;
+  inputSchema?: any;
 };
 
 export type MCPServer = {
