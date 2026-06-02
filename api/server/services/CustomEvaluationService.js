@@ -7,6 +7,19 @@
 
 const { getDatDatasourceModel } = require('../../models/DatDatasource');
 
+function loadDriver(moduleName, provider) {
+  try {
+    return require(moduleName);
+  } catch (error) {
+    if (error.code === 'MODULE_NOT_FOUND' && error.message.includes(moduleName)) {
+      throw new Error(
+        `缺少 ${provider} 数据库驱动 ${moduleName}，请先在 api 服务安装对应依赖后再执行自定义评估`,
+      );
+    }
+    throw error;
+  }
+}
+
 class CustomEvaluationService {
   /**
    * 评估自定义数据集
@@ -88,7 +101,7 @@ class CustomEvaluationService {
       config instanceof Map ? Object.fromEntries(config) : config;
 
     if (provider === 'mysql') {
-      const mysql = require('mysql2/promise');
+      const mysql = loadDriver('mysql2/promise', 'MySQL');
       const connection = await mysql.createConnection({
         host: conf.host || 'localhost',
         port: parseInt(conf.port || '3306', 10),
@@ -101,7 +114,7 @@ class CustomEvaluationService {
     }
 
     if (provider === 'postgresql' || provider === 'postgres') {
-      const { Client } = require('pg');
+      const { Client } = loadDriver('pg', 'PostgreSQL');
       const client = new Client({
         host: conf.host || 'localhost',
         port: parseInt(conf.port || '5432', 10),
@@ -115,8 +128,8 @@ class CustomEvaluationService {
     }
 
     if (provider === 'sqlite') {
-      const sqlite3 = require('sqlite3');
-      const { open } = require('sqlite');
+      const sqlite3 = loadDriver('sqlite3', 'SQLite');
+      const { open } = loadDriver('sqlite', 'SQLite');
       const dbPath = conf.path || conf.database || '';
       const db = await open({
         filename: dbPath,

@@ -55,6 +55,7 @@ function getProviderConfig({ provider, appConfig }) {
       throw new Error(`Provider ${provider} not supported`);
     }
     getOptions = initCustom;
+    overrideProvider = Providers.OPENAI;
   }
 
   if (isKnownCustomProvider(overrideProvider) && !customEndpointConfig) {

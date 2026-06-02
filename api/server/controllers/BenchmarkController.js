@@ -1,4 +1,5 @@
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
@@ -11,8 +12,43 @@ const { getAgent } = require('~/models/Agent');
 const { validateBenchmarkDataset, generateTemplate } = require('../utils/validateBenchmarkDataset');
 
 const getBenchmarkRoot = () => path.join(__dirname, '../../benchmark');
-// 结果目录放在项目根下，避免 nodemon 监听 api 时因写入结果文件而重启
-const getResultsDir = () => path.join(process.cwd(), 'benchmark_results');
+let resolvedResultsDir = null;
+
+const resolveWritableDir = (dir) => {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+    return dir;
+  } catch {
+    return null;
+  }
+};
+
+const getResultsDir = () => {
+  if (resolvedResultsDir) {
+    return resolvedResultsDir;
+  }
+
+  const candidates = [
+    process.env.BENCHMARK_RESULTS_DIR,
+    path.join(process.cwd(), 'benchmark_results'),
+    path.join(os.tmpdir(), 'becauseai', 'benchmark_results'),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const writableDir = resolveWritableDir(candidate);
+    if (writableDir) {
+      resolvedResultsDir = writableDir;
+      if (candidate !== path.join(process.cwd(), 'benchmark_results')) {
+        console.warn(`[BenchmarkController] benchmark results dir fallback: ${resolvedResultsDir}`);
+      }
+      return resolvedResultsDir;
+    }
+  }
+
+  throw new Error('No writable directory available for benchmark results');
+};
+
 const getCustomDatasetsDir = () => path.join(getResultsDir(), 'custom_datasets');
 
 /** 总耗时：已完成任务用完成时间减开始时间（固定），未完成用当前时间减开始时间 */
