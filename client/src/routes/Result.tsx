@@ -4,124 +4,149 @@ import { useAuthContext } from '~/hooks/AuthContext';
 import { SystemRoles } from '@because/data-provider';
 import useAuthRedirect from './useAuthRedirect';
 
-function escapeXml(unsafe: any): string {
+function escapeHtml(unsafe: any): string {
   if (unsafe == null) return '';
   const str = typeof unsafe === 'string' ? unsafe : String(unsafe);
-  return str
+  // 过滤掉 HTML/XML 都不允许的控制字符（保留 \t \n \r），避免 Excel 解析失败
+  const sanitized = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  return sanitized
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replace(/'/g, '&#39;')
+    .replace(/\r\n|\r|\n/g, '<br/>');
 }
 
-function generateExcelXml(details: any[], results: any) {
-  let xml = `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
- <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
-  <Author>BecauseAI</Author>
-  <Created>${new Date().toISOString()}</Created>
- </DocumentProperties>
- <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Bottom"/>
-   <Borders/>
-   <Font ss:FontName="Segoe UI" ss:Size="11" ss:Color="#000000"/>
-   <Interior/>
-   <NumberFormat/>
-   <Protection/>
-  </Style>
-  <Style ss:ID="Header">
-   <Font ss:FontName="Segoe UI" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
-   <Interior ss:Color="#4F81BD" ss:Pattern="Solid"/>
-  </Style>
- </Styles>
- <Worksheet ss:Name="每题详细数据">
-  <Table ss:ExpandedColumnCount="5" ss:ExpandedRowCount="${details.length + 1}" x:FullColumns="1" x:FullRows="1" ss:DefaultColumnWidth="60">
-   <Column ss:Index="1" ss:Width="80"/>
-   <Column ss:Index="2" ss:Width="250"/>
-   <Column ss:Index="3" ss:Width="250"/>
-   <Column ss:Index="4" ss:Width="250"/>
-   <Column ss:Index="5" ss:Width="80"/>
-   <Row ss:Height="20" ss:StyleID="Header">
-    <Cell><Data ss:Type="String">问题序号</Data></Cell>
-    <Cell><Data ss:Type="String">问题</Data></Cell>
-    <Cell><Data ss:Type="String">生成的SQL</Data></Cell>
-    <Cell><Data ss:Type="String">标准答案SQL</Data></Cell>
-    <Cell><Data ss:Type="String">耗时 (ms)</Data></Cell>
-   </Row>`;
+function generateExcelHtml(details: any[], results: any) {
+  const sheetNames = ['每题详细数据', '总体正确率'];
 
-  details.forEach((item) => {
-    xml += `
-   <Row ss:Height="18">
-    <Cell><Data ss:Type="String">${escapeXml(item.question_id || `item_${item.index + 1}`)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(item.question)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(item.predictedSQL)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(item.groundTruthSQL)}</Data></Cell>
-    <Cell><Data ss:Type="Number">${item.duration || 0}</Data></Cell>
-   </Row>`;
-  });
-
-  xml += `
-  </Table>
- </Worksheet>`;
+  const detailRows = details
+    .map((item) => {
+      const idx = typeof item.index === 'number' ? item.index : 0;
+      const qid = item.question_id || `item_${idx + 1}`;
+      return `<tr>
+  <td style="mso-number-format:'\\@';">${escapeHtml(qid)}</td>
+  <td>${escapeHtml(item.question)}</td>
+  <td style="mso-number-format:'\\@';">${escapeHtml(item.predictedSQL)}</td>
+  <td style="mso-number-format:'\\@';">${escapeHtml(item.groundTruthSQL)}</td>
+  <td style="text-align:right;">${Number(item.duration) || 0}</td>
+</tr>`;
+    })
+    .join('\n');
 
   const metrics = Object.entries(results || {});
-  xml += `
- <Worksheet ss:Name="总体正确率">
-  <Table ss:ExpandedColumnCount="6" ss:ExpandedRowCount="${metrics.length + 1}" x:FullColumns="1" x:FullRows="1" ss:DefaultColumnWidth="60">
-   <Column ss:Index="1" ss:Width="180"/>
-   <Column ss:Index="2" ss:Width="100"/>
-   <Column ss:Index="3" ss:Width="100"/>
-   <Column ss:Index="4" ss:Width="100"/>
-   <Column ss:Index="5" ss:Width="100"/>
-   <Column ss:Index="6" ss:Width="80"/>
-   <Row ss:Height="20" ss:StyleID="Header">
-    <Cell><Data ss:Type="String">指标</Data></Cell>
-    <Cell><Data ss:Type="String">总体准确率</Data></Cell>
-    <Cell><Data ss:Type="String">简单准确率</Data></Cell>
-    <Cell><Data ss:Type="String">中等准确率</Data></Cell>
-    <Cell><Data ss:Type="String">困难准确率</Data></Cell>
-    <Cell><Data ss:Type="String">总题数</Data></Cell>
-   </Row>`;
+  const metricRows = metrics
+    .map(([metricName, res]: [string, any]) => {
+      const fmt = (v: any) => (v !== undefined && v !== null ? `${Number(v).toFixed(2)}%` : '-');
+      const total = res.total !== undefined && res.total !== null ? res.total : '-';
+      const displayName =
+        metricName === 'EX'
+          ? '执行准确率 (EX)'
+          : metricName === 'R-VES'
+            ? '基于奖励的效率分数 (R-VES)'
+            : metricName === 'Soft F1'
+              ? '生成SQL表结构相似度 (Soft F1)'
+              : metricName;
+      return `<tr>
+  <td>${escapeHtml(displayName)}</td>
+  <td>${escapeHtml(fmt(res.accuracy))}</td>
+  <td>${escapeHtml(fmt(res.simple))}</td>
+  <td>${escapeHtml(fmt(res.moderate))}</td>
+  <td>${escapeHtml(fmt(res.challenging))}</td>
+  <td>${escapeHtml(String(total))}</td>
+</tr>`;
+    })
+    .join('\n');
 
-  metrics.forEach(([metricName, res]: [string, any]) => {
-    const accuracy = res.accuracy !== undefined ? `${res.accuracy.toFixed(2)}%` : '-';
-    const simple = res.simple !== undefined ? `${res.simple.toFixed(2)}%` : '-';
-    const moderate = res.moderate !== undefined ? `${res.moderate.toFixed(2)}%` : '-';
-    const challenging = res.challenging !== undefined ? `${res.challenging.toFixed(2)}%` : '-';
-    const total = res.total !== undefined ? res.total : '-';
+  const worksheetXml = sheetNames
+    .map(
+      (name) => `   <x:ExcelWorksheet>
+    <x:Name>${escapeHtml(name)}</x:Name>
+    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+   </x:ExcelWorksheet>`,
+    )
+    .join('\n');
 
-    const displayName = metricName === 'EX' 
-      ? '执行准确率 (EX)' 
-      : metricName === 'R-VES' 
-        ? '基于奖励的效率分数 (R-VES)' 
-        : metricName === 'Soft F1' 
-          ? '生成SQL表结构相似度 (Soft F1)' 
-          : metricName;
-
-    xml += `
-   <Row ss:Height="18">
-    <Cell><Data ss:Type="String">${escapeXml(displayName)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(accuracy)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(simple)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(moderate)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(challenging)}</Data></Cell>
-    <Cell><Data ss:Type="String">${escapeXml(total.toString())}</Data></Cell>
-   </Row>`;
-  });
-
-  xml += `
-  </Table>
- </Worksheet>
-</Workbook>`;
-
-  return xml;
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta http-equiv="Content-Type" content="application/vnd.ms-excel; charset=UTF-8"/>
+<meta charset="UTF-8"/>
+<title>基准测试结果</title>
+<!--[if gte mso 9]><xml>
+ <x:ExcelWorkbook>
+  <x:ExcelWorksheets>
+${worksheetXml}
+  </x:ExcelWorksheets>
+  <x:WindowHeight>9000</x:WindowHeight>
+  <x:WindowWidth>13860</x:WindowWidth>
+  <x:ProtectStructure>False</x:ProtectStructure>
+  <x:ProtectWindows>False</x:ProtectWindows>
+ </x:ExcelWorkbook>
+</xml><![endif]-->
+<style type="text/css">
+table { border-collapse: collapse; font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; font-size: 11pt; }
+th, td { border: 1px solid #999; padding: 4px 8px; vertical-align: top; mso-data-placement: same-cell; }
+th { background-color: #4F81BD; color: #FFFFFF; font-weight: bold; text-align: center; }
+.sheet-title { font-size: 14pt; font-weight: bold; margin: 0 0 8px 0; }
+</style>
+</head>
+<body>
+<div>
+  <p class="sheet-title">${escapeHtml(sheetNames[0])}</p>
+  <table>
+    <colgroup>
+      <col style="width:100px"/>
+      <col style="width:320px"/>
+      <col style="width:320px"/>
+      <col style="width:320px"/>
+      <col style="width:90px"/>
+    </colgroup>
+    <thead>
+      <tr>
+        <th>问题序号</th>
+        <th>问题</th>
+        <th>生成的SQL</th>
+        <th>标准答案SQL</th>
+        <th>耗时 (ms)</th>
+      </tr>
+    </thead>
+    <tbody>
+${detailRows || '<tr><td colspan="5" style="text-align:center;color:#888;">暂无明细数据</td></tr>'}
+    </tbody>
+  </table>
+</div>
+<br clear="all" style="mso-special-character:line-break;page-break-before:always;"/>
+<div>
+  <p class="sheet-title">${escapeHtml(sheetNames[1])}</p>
+  <table>
+    <colgroup>
+      <col style="width:220px"/>
+      <col style="width:120px"/>
+      <col style="width:120px"/>
+      <col style="width:120px"/>
+      <col style="width:120px"/>
+      <col style="width:90px"/>
+    </colgroup>
+    <thead>
+      <tr>
+        <th>指标</th>
+        <th>总体准确率</th>
+        <th>简单准确率</th>
+        <th>中等准确率</th>
+        <th>困难准确率</th>
+        <th>总题数</th>
+      </tr>
+    </thead>
+    <tbody>
+${metricRows || '<tr><td colspan="6" style="text-align:center;color:#888;">暂无指标数据</td></tr>'}
+    </tbody>
+  </table>
+</div>
+</body>
+</html>`;
 }
 
 export default function Result() {
@@ -146,8 +171,11 @@ export default function Result() {
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       const data = await response.json();
       
-      const xmlContent = generateExcelXml(data.details || [], data.results);
-      const blob = new Blob([xmlContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const htmlContent = generateExcelHtml(data.details || [], data.results);
+      // 关键：UTF-8 BOM (﻿) 让所有版本的 Office 都能正确识别 UTF-8 编码，
+      // 否则中文 Windows 上低版本 Office 会按 GBK 解码导致中文乱码。
+      const BOM = '﻿';
+      const blob = new Blob([BOM, htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
