@@ -63,10 +63,12 @@ mcpServers:
           projectId: projectId # becauseai-server ask_data 需要显式 projectId
           arg1: projectId # becauseai-server ask_data 兼容旧版参数位
           arg2: datasourceId # becauseai-server ask_data 约定 arg2 = 数据源 ID
-          arg4: question # becauseai-server ask_data 约定 arg4 = 用户问题
+          arg4: orgCode # 指标问数链路必传：当前用户机构编码（来自用户表 orgCode 字段）
+          arg5: question # becauseai-server ask_data 约定 arg5 = 用户问题（原 arg4 上移）
         hideFromSchema:
           - arg1
           - arg2
+          - arg4
       agents:
         resolve:
           - from: conversation

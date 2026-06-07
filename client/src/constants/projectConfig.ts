@@ -404,6 +404,8 @@ export const providerConfigs: Record<string, Record<string, ProviderConfig>> = {
                 { key: 'data-preview-limit', label: '数据预览条数', type: 'number', default: 3, min: 1, max: 20, tip: '从数据库获取并展示给 LLM 的最大样本记录数，值必须在 1 到 20 之间' },
                 { key: 'text-to-sql-rules', label: 'Text-to-SQL 规则', type: 'textarea', tip: '自定义 Text-to-SQL 规则，为空时使用内置规则' },
                 { key: 'instruction', label: '自定义指令', type: 'textarea', tip: '用户自定义指令' },
+                { key: 'index-ask', label: '指标问数', type: 'switch', default: false, tip: '开启后启用指标库召回、组织权限拦截、日期场景识别、字段白名单等指标问数链路。需要每次问数携带 org_code' },
+                { key: 'index-ask-llm', label: '指标问数 LLM', type: 'llm-select', tip: '指标上下文解析使用的 LLM 模型名称，未指定则使用默认 LLM' },
             ]
         },
         agentic: {

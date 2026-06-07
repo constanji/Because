@@ -38,6 +38,8 @@ export interface IUser extends Document {
   updatedAt?: Date;
   /** Field for external source identification (for consistency with TPrincipal schema) */
   idOnTheSource?: string;
+  /** 机构编码 — 指标问数 MCP 调用必传，源自机构信息管理 */
+  orgCode?: string;
 }
 
 export interface BalanceConfig {
@@ -66,6 +68,7 @@ export interface UpdateUserRequest {
   personalization?: {
     memories?: boolean;
   };
+  orgCode?: string | null;
 }
 
 export interface UserDeleteResult {

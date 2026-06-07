@@ -56,7 +56,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 /**
  * @typedef {{ from: 'conversation' | 'requestBody' | 'agentBinding', field?: string }} ResolveSource
  * @typedef {{ resolve: ResolveSource[], inject: Record<string, string>, hideFromSchema?: string[] }} ContextInjectionConfig
- * @typedef {{ projectId: string, datasourceId: string, source?: string }} McpExecutionContext
+ * @typedef {{ projectId: string, datasourceId: string, source?: string, orgCode?: string }} McpExecutionContext
  */
 
 /**
@@ -329,8 +329,14 @@ async function resolveAndInjectMcpContext({
     return args;
   }
 
+  // 把当前用户的机构编码带到上下文，让 inject 映射 `arg4: orgCode` 等规则直接生效
+  const userOrgCode = configurable?.user?.orgCode;
+  if (userOrgCode != null && userOrgCode !== '' && context.orgCode == null) {
+    context.orgCode = String(userOrgCode);
+  }
+
   logger.info(
-    `[MCP][${serverName}] Context resolved (source=${context.source}): projectId=${context.projectId}, datasourceId=${context.datasourceId}`,
+    `[MCP][${serverName}] Context resolved (source=${context.source}): projectId=${context.projectId}, datasourceId=${context.datasourceId}, orgCode=${context.orgCode || '-'}`,
   );
 
   const userId = configurable?.user?.id || configurable?.user_id;

@@ -121,14 +121,14 @@ async function updateUserRoleController(req, res) {
       userId,
       { role },
       { new: true, runValidators: true }
-    ).select('_id email username name avatar provider role createdAt updatedAt');
+    ).select('_id email username name avatar provider role orgCode createdAt updatedAt');
 
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
 
     logger.info(`Admin updated user role. User: ${user.email} New role: ${role}`);
-    res.status(200).json({ 
+    res.status(200).json({
       message: '用户角色已更新',
       user: {
         _id: user._id.toString(),
@@ -138,6 +138,7 @@ async function updateUserRoleController(req, res) {
         avatar: user.avatar,
         provider: user.provider,
         role: user.role,
+        orgCode: user.orgCode || null,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       }
@@ -145,6 +146,55 @@ async function updateUserRoleController(req, res) {
   } catch (error) {
     logger.error('[updateUserRoleController]', error);
     res.status(500).json({ error: error.message || '更新用户角色失败' });
+  }
+}
+
+// 更新用户机构编码（管理员）
+async function updateUserOrgCodeController(req, res) {
+  try {
+    const { userId } = req.params;
+    const raw = req.body?.orgCode;
+
+    if (!userId) {
+      return res.status(400).json({ error: '用户ID不能为空' });
+    }
+
+    // 空字符串 / null 视为清空机构绑定
+    const trimmed = typeof raw === 'string' ? raw.trim() : '';
+    const update = trimmed
+      ? { orgCode: trimmed }
+      : { $unset: { orgCode: 1 } };
+
+    const user = await User.findByIdAndUpdate(userId, update, {
+      new: true,
+      runValidators: true,
+    }).select('_id email username name avatar provider role orgCode createdAt updatedAt');
+
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    logger.info(
+      `Admin updated user orgCode. User: ${user.email} orgCode: ${user.orgCode || '(已清空)'}`,
+    );
+    res.status(200).json({
+      message: trimmed ? '用户机构已更新' : '已清空用户机构',
+      user: {
+        _id: user._id.toString(),
+        email: user.email,
+        username: user.username,
+        name: user.name,
+        avatar: user.avatar,
+        provider: user.provider,
+        role: user.role,
+        orgCode: user.orgCode || null,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+    });
+  } catch (error) {
+    logger.error('[updateUserOrgCodeController]', error);
+    res.status(500).json({ error: error.message || '更新用户机构失败' });
   }
 }
 
@@ -194,6 +244,7 @@ module.exports = {
   checkAdmin,
   deleteUserByIdController,
   updateUserRoleController,
+  updateUserOrgCodeController,
   getUserMemoriesController,
 };
 

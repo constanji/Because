@@ -19,7 +19,11 @@ import {
     Code,
     ArrowLeftRight,
     Upload,
-    Inbox
+    Inbox,
+    Tag,
+    Network,
+    Code2,
+    RotateCw,
 } from 'lucide-react';
 import { providerConfigs, ProviderType } from '~/constants/projectConfig';
 import ProviderConfigForm from './components/ProviderConfigForm';
@@ -27,6 +31,28 @@ import EmailSenderConfig from './components/EmailSenderConfig';
 import McpServersConfig from './components/McpServersConfig';
 
 const DAT_API_BASE = import.meta.env.VITE_DAT_OPENAPI_BASE_URL || 'http://localhost:8080';
+
+interface OrgPreviewNode {
+    key: string;
+    title: string;
+    children: OrgPreviewNode[];
+}
+
+// 简易树视图：避免引入额外 UI 库，单纯渲染嵌套缩进 + 折叠
+function OrgTreeView({ nodes, depth }: { nodes: OrgPreviewNode[]; depth: number }) {
+    return (
+        <ul className={cn(depth === 0 ? 'space-y-1' : 'space-y-1 border-l border-border-light pl-3 ml-1')}>
+            {nodes.map((n) => (
+                <li key={n.key}>
+                    <div className="text-text-primary">{n.title}</div>
+                    {n.children && n.children.length > 0 && (
+                        <OrgTreeView nodes={n.children} depth={depth + 1} />
+                    )}
+                </li>
+            ))}
+        </ul>
+    );
+}
 
 // 将后端返回的驼峰命名字段转换为前端使用的下划线命名
 // 后端可能返回 embeddingStore，但前端期望 embedding_store
@@ -102,7 +128,22 @@ interface DocItem {
     content: string;
 }
 
-type ContentTabType = 'sql-pairs' | 'synonyms' | 'docs';
+interface IndexEntry {
+    id: string;
+    indexNumber: string;
+    standardName: string;
+    aliases?: string[];
+    source?: number | null;
+    frequency?: string | null;
+}
+
+interface IndexUploadResult {
+    upserted: number;
+    skippedRows: number;
+    errors: { rowNumber: number; message: string }[];
+}
+
+type ContentTabType = 'sql-pairs' | 'synonyms' | 'docs' | 'index-entries' | 'org-nodes';
 
 // 默认项目数据
 const getDefaultProject = (): Omit<
@@ -202,6 +243,48 @@ export default function ProjectsManagement() {
     const [docModalVisible, setDocModalVisible] = useState(false);
     const [docForm, setDocForm] = useState({ content: '' });
     const [uploading, setUploading] = useState(false);
+
+    // Index Entries (指标库)
+    const [indexEntries, setIndexEntries] = useState<IndexEntry[]>([]);
+    const [indexSearchQuery, setIndexSearchQuery] = useState('');
+    const [indexModalVisible, setIndexModalVisible] = useState(false);
+    const [indexEditingId, setIndexEditingId] = useState<string | null>(null);
+    const [indexForm, setIndexForm] = useState<{
+        indexNumber: string;
+        standardName: string;
+        aliases: string;
+        source: number | undefined;
+        frequency: string;
+    }>({ indexNumber: '', standardName: '', aliases: '', source: undefined, frequency: '' });
+    const [indexUploadModalVisible, setIndexUploadModalVisible] = useState(false);
+    const [indexUploading, setIndexUploading] = useState(false);
+    const [indexUploadResult, setIndexUploadResult] = useState<IndexUploadResult | null>(null);
+
+    // Org Nodes (机构信息 JSON)
+    const ORG_NODES_TEMPLATE = `[
+  {
+    "orgCode": "H0001",
+    "orgName": "总行",
+    "orgType": "HEAD_OFFICE",
+    "dataScope": "ALL",
+    "children": [
+      {
+        "orgCode": "B0001",
+        "orgName": "北京分行",
+        "orgType": "BRANCH",
+        "dataScope": "SELF_AND_DESCENDANTS",
+        "children": [
+          { "orgCode": "S00001", "orgName": "北京城南支行", "orgType": "SUB_BRANCH", "dataScope": "SELF" }
+        ]
+      }
+    ]
+  }
+]`;
+    const [orgNodesJsonText, setOrgNodesJsonText] = useState<string>(ORG_NODES_TEMPLATE);
+    const [orgNodesJsonError, setOrgNodesJsonError] = useState<string>('');
+    const [orgNodesPreview, setOrgNodesPreview] = useState<OrgPreviewNode[]>([]);
+    const [orgNodesSaving, setOrgNodesSaving] = useState(false);
+    const [orgNodesLoading, setOrgNodesLoading] = useState(false);
 
     // 获取 API 基础路径
     const getApiBase = useCallback(() => {
@@ -466,6 +549,12 @@ export default function ProjectsManagement() {
         setSqlPairs([]);
         setSynonyms([]);
         setDocs([]);
+        setIndexEntries([]);
+        setIndexSearchQuery('');
+        setIndexUploadResult(null);
+        setOrgNodesJsonText(ORG_NODES_TEMPLATE);
+        setOrgNodesJsonError('');
+        setOrgNodesPreview([]);
         setSqlSearchQuery('');
         setSynSearchQuery('');
         setDocSearchQuery('');
@@ -478,6 +567,9 @@ export default function ProjectsManagement() {
         setSqlPairs([]);
         setSynonyms([]);
         setDocs([]);
+        setIndexEntries([]);
+        setOrgNodesJsonText(ORG_NODES_TEMPLATE);
+        setOrgNodesPreview([]);
     };
 
     // ---- SQL Pairs ----
@@ -799,8 +891,300 @@ export default function ProjectsManagement() {
             loadSqlPairs(contentManagementProject._id);
         } else if (tab === 'synonyms') {
             loadSynonyms(contentManagementProject._id);
+        } else if (tab === 'index-entries') {
+            loadIndexEntries(contentManagementProject._id);
+        } else if (tab === 'org-nodes') {
+            loadOrgNodes(contentManagementProject._id);
         } else {
             loadDocs(contentManagementProject._id);
+        }
+    };
+
+    // ============ Index Entries (指标库) ============
+    const sourceLabel = (n: number | null | undefined) => {
+        if (n == null) return '-';
+        return ({ 1: '人行', 2: '银监', 3: '省联社' } as Record<number, string>)[n] || String(n);
+    };
+
+    const loadIndexEntries = async (projectId: string) => {
+        setContentLoading(true);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/index/entries?projectId=${projectId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setIndexEntries(data || []);
+            } else {
+                setIndexEntries([]);
+            }
+        } catch (error) {
+            console.error('Failed to load index entries:', error);
+            setIndexEntries([]);
+        } finally {
+            setContentLoading(false);
+        }
+    };
+
+    // 后端 list 不带模糊检索，前端本地子串过滤
+    const searchIndexEntries = async () => {
+        if (!contentManagementProject) return;
+        const projectId = contentManagementProject._id;
+        setContentLoading(true);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/index/entries?projectId=${projectId}`);
+            if (!response.ok) throw new Error('加载失败');
+            const all: IndexEntry[] = await response.json();
+            const q = indexSearchQuery.trim();
+            if (!q) {
+                setIndexEntries(all || []);
+            } else {
+                const filtered = (all || []).filter((e) =>
+                    (e.indexNumber || '').includes(q) ||
+                    (e.standardName || '').includes(q) ||
+                    (e.aliases || []).some((a) => (a || '').includes(q))
+                );
+                setIndexEntries(filtered);
+                showToast({ message: `本地过滤到 ${filtered.length} 个结果`, status: 'success' });
+            }
+        } catch (error) {
+            showToast({ message: `检索失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setContentLoading(false);
+        }
+    };
+
+    const openAddIndexEntry = () => {
+        setIndexEditingId(null);
+        setIndexForm({ indexNumber: '', standardName: '', aliases: '', source: undefined, frequency: '' });
+        setIndexModalVisible(true);
+    };
+
+    const openEditIndexEntry = (record: IndexEntry) => {
+        setIndexEditingId(record.id);
+        setIndexForm({
+            indexNumber: record.indexNumber,
+            standardName: record.standardName,
+            aliases: (record.aliases || []).join('/'),
+            source: record.source ?? undefined,
+            frequency: record.frequency || '',
+        });
+        setIndexModalVisible(true);
+    };
+
+    const handleSaveIndexEntry = async () => {
+        if (!contentManagementProject) return;
+        const { indexNumber, standardName } = indexForm;
+        if (!indexNumber.trim()) {
+            showToast({ message: '请填写指标编码', status: 'warning' });
+            return;
+        }
+        if (!standardName.trim()) {
+            showToast({ message: '请填写指标名称', status: 'warning' });
+            return;
+        }
+        const aliases = (indexForm.aliases || '')
+            .split(/[/,;、，；]/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0 && s !== standardName.trim());
+        try {
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/index/entries?projectId=${contentManagementProject._id}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        indexNumber: indexNumber.trim(),
+                        standardName: standardName.trim(),
+                        aliases,
+                        source: indexForm.source,
+                        frequency: (indexForm.frequency || '').trim() || null,
+                    }),
+                }
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            showToast({ message: indexEditingId ? '更新成功' : '添加成功', status: 'success' });
+            setIndexModalVisible(false);
+            loadIndexEntries(contentManagementProject._id);
+        } catch (error) {
+            showToast({
+                message: `${indexEditingId ? '更新' : '添加'}失败: ${error instanceof Error ? error.message : '未知错误'}`,
+                status: 'error',
+            });
+        }
+    };
+
+    const handleRemoveIndexEntry = async (id: string) => {
+        if (!contentManagementProject) return;
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/index/entries/${id}`, { method: 'DELETE' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            showToast({ message: '删除成功', status: 'success' });
+            loadIndexEntries(contentManagementProject._id);
+        } catch (error) {
+            showToast({ message: `删除失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleClearAllIndexEntries = async () => {
+        if (!contentManagementProject) return;
+        if (!confirm('确定要清空该项目下所有指标吗？此操作不可恢复！')) return;
+        try {
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/index/entries/all?projectId=${contentManagementProject._id}`,
+                { method: 'DELETE' }
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            showToast({ message: '清空成功', status: 'success' });
+            setIndexEntries([]);
+        } catch (error) {
+            showToast({ message: `清空失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleUploadIndexEntryFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!contentManagementProject || !e.target.files?.[0]) return;
+        const file = e.target.files[0];
+        setIndexUploading(true);
+        setIndexUploadResult(null);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/index/entries/upload?projectId=${contentManagementProject._id}`,
+                { method: 'POST', body: formData }
+            );
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(errText || `HTTP ${response.status}`);
+            }
+            const result: IndexUploadResult = await response.json();
+            setIndexUploadResult(result);
+            const errCount = (result.errors || []).length;
+            if (errCount === 0) {
+                showToast({
+                    message: `导入成功：写入 ${result.upserted} 条，跳过空行 ${result.skippedRows} 行`,
+                    status: 'success',
+                });
+            } else {
+                showToast({
+                    message: `导入完成：写入 ${result.upserted} 条，跳过 ${result.skippedRows} 行，${errCount} 行错误（详见弹窗）`,
+                    status: 'warning',
+                });
+            }
+            loadIndexEntries(contentManagementProject._id);
+        } catch (error) {
+            showToast({ message: `上传失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setIndexUploading(false);
+            e.target.value = '';
+        }
+    };
+
+    // ============ Org Nodes (机构信息 JSON 模型) ============
+
+    const stripForEditor = (nodes: any[]): any[] =>
+        (nodes || []).map((n) => {
+            const obj: any = {
+                orgCode: n.orgCode,
+                orgName: n.orgName,
+                orgType: n.orgType,
+                dataScope: n.dataScope,
+            };
+            if (n.children && n.children.length > 0) {
+                obj.children = stripForEditor(n.children);
+            }
+            return obj;
+        });
+
+    const jsonToPreviewTree = (nodes: any[]): OrgPreviewNode[] =>
+        (nodes || []).map((n) => ({
+            key: `org-${n.orgCode}`,
+            title: `${n.orgCode} ${n.orgName || ''} [${n.orgType}/${n.dataScope}]`,
+            children: jsonToPreviewTree(n.children || []),
+        }));
+
+    const parseOrgNodesJson = (text?: string): any[] | null => {
+        const source = text ?? orgNodesJsonText;
+        try {
+            const parsed = JSON.parse(source || '[]');
+            if (!Array.isArray(parsed)) throw new Error('根必须是数组');
+            setOrgNodesPreview(jsonToPreviewTree(parsed));
+            setOrgNodesJsonError('');
+            return parsed;
+        } catch (err) {
+            setOrgNodesJsonError('JSON 格式错误: ' + (err instanceof Error ? err.message : String(err)));
+            setOrgNodesPreview([]);
+            return null;
+        }
+    };
+
+    const loadOrgNodes = async (projectId: string) => {
+        setOrgNodesLoading(true);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes?projectId=${projectId}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const tree = await response.json();
+            const nextText = tree && tree.length > 0 ? JSON.stringify(stripForEditor(tree), null, 2) : ORG_NODES_TEMPLATE;
+            setOrgNodesJsonText(nextText);
+            parseOrgNodesJson(nextText);
+        } catch (error) {
+            showToast({ message: `加载机构信息失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+            setOrgNodesJsonText(ORG_NODES_TEMPLATE);
+            parseOrgNodesJson(ORG_NODES_TEMPLATE);
+        } finally {
+            setOrgNodesLoading(false);
+        }
+    };
+
+    const handleSaveOrgNodes = async () => {
+        if (!contentManagementProject) return;
+        const parsed = parseOrgNodesJson();
+        if (parsed === null) {
+            showToast({ message: 'JSON 有错误，请先修正', status: 'error' });
+            return;
+        }
+        setOrgNodesSaving(true);
+        try {
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/org/nodes?projectId=${contentManagementProject._id}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(parsed),
+                }
+            );
+            const body = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(body?.message || `HTTP ${response.status}`);
+            }
+            showToast({ message: `保存成功，${body?.inserted || 0} 个机构已生效`, status: 'success' });
+        } catch (error) {
+            showToast({ message: `保存失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setOrgNodesSaving(false);
+        }
+    };
+
+    const handleClearOrgNodes = async () => {
+        if (!contentManagementProject) return;
+        if (!confirm('将清空该项目下全部机构信息，清空后所有指标问数权限失效。是否继续？')) return;
+        try {
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/org/nodes/all?projectId=${contentManagementProject._id}`,
+                { method: 'DELETE' }
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            showToast({ message: '清空成功', status: 'success' });
+            setOrgNodesJsonText(ORG_NODES_TEMPLATE);
+            parseOrgNodesJson(ORG_NODES_TEMPLATE);
+        } catch (error) {
+            showToast({ message: `清空失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleFormatOrgJson = () => {
+        const parsed = parseOrgNodesJson();
+        if (parsed !== null) {
+            setOrgNodesJsonText(JSON.stringify(parsed, null, 2));
         }
     };
 
@@ -1413,6 +1797,32 @@ export default function ProjectsManagement() {
                                 <FileText className="h-4 w-4" />
                                 业务知识
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => handleContentTabChange('index-entries')}
+                                className={cn(
+                                    "px-4 py-3 text-sm font-medium border-b-2 -mb-[1px] transition-colors flex items-center gap-1.5",
+                                    contentActiveTab === 'index-entries'
+                                        ? "border-blue-500 text-blue-600"
+                                        : "border-transparent text-text-secondary hover:text-text-primary"
+                                )}
+                            >
+                                <Tag className="h-4 w-4" />
+                                指标库
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleContentTabChange('org-nodes')}
+                                className={cn(
+                                    "px-4 py-3 text-sm font-medium border-b-2 -mb-[1px] transition-colors flex items-center gap-1.5",
+                                    contentActiveTab === 'org-nodes'
+                                        ? "border-blue-500 text-blue-600"
+                                        : "border-transparent text-text-secondary hover:text-text-primary"
+                                )}
+                            >
+                                <Network className="h-4 w-4" />
+                                机构信息
+                            </button>
                         </div>
 
                         {/* Tab Content */}
@@ -1672,6 +2082,213 @@ export default function ProjectsManagement() {
                                     )}
                                 </div>
                             )}
+
+                            {/* Index Entries Tab (指标库) */}
+                            {contentActiveTab === 'index-entries' && (
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+                                                <input
+                                                    type="text"
+                                                    value={indexSearchQuery}
+                                                    onChange={(e) => setIndexSearchQuery(e.target.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && searchIndexEntries()}
+                                                    placeholder="按编码 / 名称 / 别名过滤..."
+                                                    className="w-72 pl-8 pr-3 py-2 text-sm rounded-md border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                />
+                                            </div>
+                                            <Button onClick={searchIndexEntries} className="btn btn-neutral text-sm">
+                                                检索
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button onClick={openAddIndexEntry} className="btn btn-primary text-sm flex items-center gap-1">
+                                                <Plus className="h-4 w-4" /> 添加
+                                            </Button>
+                                            <Button
+                                                onClick={() => setIndexUploadModalVisible(true)}
+                                                className="btn btn-neutral text-sm flex items-center gap-1"
+                                            >
+                                                <Upload className="h-4 w-4" /> 上传 Excel
+                                            </Button>
+                                            <Button
+                                                onClick={handleClearAllIndexEntries}
+                                                disabled={indexEntries.length === 0}
+                                                className="btn btn-neutral text-sm text-red-500 disabled:opacity-50"
+                                            >
+                                                清空全部
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    {contentLoading ? (
+                                        <div className="flex h-40 items-center justify-center text-text-secondary">
+                                            <p className="text-sm">加载中...</p>
+                                        </div>
+                                    ) : indexEntries.length === 0 ? (
+                                        <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
+                                            <Tag className="h-8 w-8" />
+                                            <p className="text-sm">暂无指标</p>
+                                        </div>
+                                    ) : (
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-sm border-collapse text-white">
+                                          <thead>
+                                          <tr className="bg-surface-secondary">
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium w-32 text-white">指标编码</th>
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium w-48 text-white">指标名称</th>
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium text-white">别名</th>
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium w-24 text-white">来源</th>
+                                            <th className="border border-border-light px-3 py-2 text-left font-medium w-20 text-white">频度</th>
+                                            <th className="border border-border-light px-3 py-2 text-center font-medium w-28 text-white">操作</th>
+                                          </tr>
+                                          </thead>
+                                          <tbody>
+                                          {indexEntries.map((item, idx) => (
+                                            <tr key={item.id} className={idx % 2 === 0 ? 'bg-surface-primary' : 'bg-surface-secondary/50'}>
+                                              <td className="border border-border-light px-3 py-2 font-mono text-xs text-white">{item.indexNumber}</td>
+                                              <td className="border border-border-light px-3 py-2 text-white">{item.standardName}</td>
+                                              <td className="border border-border-light px-3 py-2">
+                                                {item.aliases && item.aliases.length > 0 ? (
+                                                  <div className="flex flex-wrap gap-1">
+                                                    {item.aliases.map((al) => (
+                                                      <span
+                                                        key={al}
+                                                        className="inline-flex items-center rounded bg-blue-500/15 px-1.5 py-0.5 text-xs text-blue-300"
+                                                      >
+                                                        {al}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-text-tertiary">-</span>
+                                                )}
+                                              </td>
+                                              <td className="border border-border-light px-3 py-2">
+                                                {item.source != null ? (
+                                                  <span className="inline-flex items-center rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-300">
+                                                    {sourceLabel(item.source)}
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-text-tertiary">-</span>
+                                                )}
+                                              </td>
+                                              <td className="border border-border-light px-3 py-2">
+                                                {item.frequency ? (
+                                                  <span className="inline-flex items-center rounded bg-purple-500/15 px-1.5 py-0.5 text-xs text-purple-300">
+                                                    {item.frequency}
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-text-tertiary">-</span>
+                                                )}
+                                              </td>
+                                              <td className="border border-border-light px-3 py-2 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                  <button
+                                                    onClick={() => openEditIndexEntry(item)}
+                                                    className="text-blue-400 hover:text-blue-300"
+                                                    title="编辑"
+                                                  >
+                                                    <Edit2 className="h-4 w-4" />
+                                                  </button>
+                                                  <button
+                                                    onClick={() => {
+                                                      if (confirm('确定删除此项吗？')) handleRemoveIndexEntry(item.id);
+                                                    }}
+                                                    className="text-red-500 hover:text-red-600"
+                                                    title="删除"
+                                                  >
+                                                    <Trash2 className="h-4 w-4" />
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Org Nodes Tab (机构信息) */}
+                            {contentActiveTab === 'org-nodes' && (
+                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+                                    <div className="lg:col-span-3 rounded-lg border border-border-light bg-surface-secondary/40 p-3">
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <h4 className="text-sm font-semibold text-text-primary">机构信息</h4>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleFormatOrgJson}
+                                                    disabled={!contentManagementProject}
+                                                    className="rounded border border-border-light px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50 flex items-center gap-1"
+                                                >
+                                                    <Code2 className="h-3 w-3" /> 格式化
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => contentManagementProject && loadOrgNodes(contentManagementProject._id)}
+                                                    disabled={!contentManagementProject || orgNodesLoading}
+                                                    className="rounded border border-border-light px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50 flex items-center gap-1"
+                                                >
+                                                    <RotateCw className={cn('h-3 w-3', orgNodesLoading && 'animate-spin')} /> 重新拉取
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSaveOrgNodes}
+                                                    disabled={!contentManagementProject || orgNodesSaving}
+                                                    className="btn btn-primary text-xs px-2 py-1"
+                                                >
+                                                    {orgNodesSaving ? '保存中...' : '保存并应用'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <textarea
+                                            value={orgNodesJsonText}
+                                            onChange={(e) => setOrgNodesJsonText(e.target.value)}
+                                            onBlur={() => parseOrgNodesJson()}
+                                            rows={22}
+                                            placeholder="嵌套 JSON 数组，每节点至少含 orgCode/orgName/orgType/dataScope"
+                                            spellCheck={false}
+                                            className={cn(
+                                                'w-full rounded-md border bg-white px-3 py-2 font-mono text-xs leading-relaxed text-gray-900 dark:bg-gray-900 dark:text-gray-100',
+                                                orgNodesJsonError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                                            )}
+                                        />
+                                        {orgNodesJsonError ? (
+                                            <div className="mt-1 text-xs text-red-500">{orgNodesJsonError}</div>
+                                        ) : (
+                                            <div className="mt-1 text-xs text-text-tertiary">✓ JSON 格式有效；失焦时自动同步到右侧树预览</div>
+                                        )}
+                                        <div className="mt-3">
+                                            <Button
+                                                onClick={handleClearOrgNodes}
+                                                disabled={!contentManagementProject}
+                                                className="btn btn-neutral text-xs text-red-500 disabled:opacity-50 flex items-center gap-1"
+                                            >
+                                                <Trash2 className="h-3 w-3" /> 清空机构信息
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="lg:col-span-2 rounded-lg border border-border-light bg-surface-secondary/40 p-3">
+                                        <h4 className="mb-2 text-sm font-semibold text-text-primary">树形预览</h4>
+                                        {orgNodesLoading ? (
+                                            <div className="flex h-40 items-center justify-center text-sm text-text-secondary">加载中...</div>
+                                        ) : orgNodesPreview.length === 0 ? (
+                                            <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
+                                                <Network className="h-8 w-8" />
+                                                <p className="text-sm">JSON 为空或格式错误</p>
+                                            </div>
+                                        ) : (
+                                            <div className="max-h-[480px] overflow-auto text-sm">
+                                                <OrgTreeView nodes={orgNodesPreview} depth={0} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1782,6 +2399,177 @@ export default function ProjectsManagement() {
                         <div className="flex justify-end gap-2 border-t border-border-light p-4">
                             <Button onClick={() => setDocModalVisible(false)} className="btn btn-neutral">取消</Button>
                             <Button onClick={handleAddDoc} className="btn btn-primary">确定</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Index Entry Add / Edit Modal */}
+            {indexModalVisible && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-xl rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <h3 className="text-lg font-semibold text-text-primary">
+                                {indexEditingId ? '编辑指标' : '添加指标'}
+                            </h3>
+                            <button onClick={() => setIndexModalVisible(false)} className="rounded p-1 text-text-secondary hover:bg-surface-hover">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="space-y-4 p-4">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">
+                                    指标编码 <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={indexForm.indexNumber}
+                                    onChange={(e) => setIndexForm((prev) => ({ ...prev, indexNumber: e.target.value }))}
+                                    disabled={!!indexEditingId}
+                                    placeholder="例如：KPI0001"
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm disabled:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:disabled:bg-gray-800"
+                                />
+                                {indexEditingId && (
+                                    <p className="mt-1 text-xs text-text-tertiary">编码作为唯一标识，编辑模式下不可修改</p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">
+                                    指标名称 <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={indexForm.standardName}
+                                    onChange={(e) => setIndexForm((prev) => ({ ...prev, standardName: e.target.value }))}
+                                    placeholder="例如：各项存款余额"
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">别名</label>
+                                <input
+                                    type="text"
+                                    value={indexForm.aliases}
+                                    onChange={(e) => setIndexForm((prev) => ({ ...prev, aliases: e.target.value }))}
+                                    placeholder='多个用 "/" 分隔，例如：存款余额/总存款'
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                                <p className="mt-1 text-xs text-text-tertiary">等于指标名称的别名会自动去重剔除</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-text-primary">指标来源</label>
+                                    <select
+                                        value={indexForm.source ?? ''}
+                                        onChange={(e) =>
+                                            setIndexForm((prev) => ({
+                                                ...prev,
+                                                source: e.target.value === '' ? undefined : Number(e.target.value),
+                                            }))
+                                        }
+                                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        <option value="">选择来源口径</option>
+                                        <option value="1">人行口径</option>
+                                        <option value="2">银监口径</option>
+                                        <option value="3">省联社口径</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-text-primary">指标频度</label>
+                                    <select
+                                        value={indexForm.frequency || ''}
+                                        onChange={(e) => setIndexForm((prev) => ({ ...prev, frequency: e.target.value }))}
+                                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        <option value="">选择频度</option>
+                                        <option value="日">日</option>
+                                        <option value="旬">旬</option>
+                                        <option value="月">月</option>
+                                        <option value="季">季</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-border-light p-4">
+                            <Button onClick={() => setIndexModalVisible(false)} className="btn btn-neutral">取消</Button>
+                            <Button onClick={handleSaveIndexEntry} className="btn btn-primary">
+                                {indexEditingId ? '更新' : '添加'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Index Entry Excel Upload Modal */}
+            {indexUploadModalVisible && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-2xl rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <h3 className="text-lg font-semibold text-text-primary">上传指标库 Excel</h3>
+                            <button
+                                onClick={() => {
+                                    setIndexUploadModalVisible(false);
+                                    setIndexUploadResult(null);
+                                }}
+                                className="rounded p-1 text-text-secondary hover:bg-surface-hover"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="space-y-3 p-4">
+                            <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-border-light px-6 py-10 text-text-secondary hover:border-blue-400 hover:text-blue-500">
+                                <Inbox className="h-10 w-10" />
+                                <span className="text-sm">{indexUploading ? '正在解析与入库...' : '点击选择 .xlsx 文件上传'}</span>
+                                <span className="text-xs text-text-tertiary">必填：指标编码 / 指标名称；可选：别名（/ 分隔）、来源、频度</span>
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".xlsx,.xls"
+                                    disabled={indexUploading}
+                                    onChange={handleUploadIndexEntryFile}
+                                />
+                            </label>
+                            {indexUploadResult && (
+                                <div className="rounded-md border border-border-light bg-surface-secondary/40 p-3 text-sm">
+                                    <div className="mb-2 grid grid-cols-3 gap-2 text-center">
+                                        <div>
+                                            <div className="text-xs text-text-tertiary">写入条数</div>
+                                            <div className="text-lg font-semibold text-green-500">{indexUploadResult.upserted}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-text-tertiary">跳过空行</div>
+                                            <div className="text-lg font-semibold text-text-primary">{indexUploadResult.skippedRows}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-text-tertiary">错误行数</div>
+                                            <div className={cn('text-lg font-semibold', (indexUploadResult.errors || []).length > 0 ? 'text-red-500' : 'text-text-primary')}>
+                                                {(indexUploadResult.errors || []).length}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {(indexUploadResult.errors || []).length > 0 && (
+                                        <div className="max-h-48 overflow-auto">
+                                            <table className="w-full text-xs border-collapse">
+                                                <thead>
+                                                <tr className="bg-surface-secondary">
+                                                    <th className="border border-border-light px-2 py-1 text-left w-20">行号</th>
+                                                    <th className="border border-border-light px-2 py-1 text-left">错误信息</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                {indexUploadResult.errors.map((err, i) => (
+                                                    <tr key={i}>
+                                                        <td className="border border-border-light px-2 py-1 font-mono">{err.rowNumber}</td>
+                                                        <td className="border border-border-light px-2 py-1 text-red-500">{err.message}</td>
+                                                    </tr>
+                                                ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
