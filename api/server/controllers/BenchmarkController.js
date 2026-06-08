@@ -210,6 +210,7 @@ class BenchmarkController {
           agentConfig,
           evaluationMetrics,
           userId: req.user?.id, // 传递用户ID
+          userOrgCode: req.user?.orgCode, // 传递机构编码，供 MCP 上下文注入 arg4 等字段
           mcpToolName,
           mcpToolArguments,
         },
@@ -752,6 +753,7 @@ class BenchmarkController {
           agentConfig,
           evaluationMetrics,
           userId: req.user?.id,
+          userOrgCode: req.user?.orgCode,
           mcpToolName,
           mcpToolArguments,
         },

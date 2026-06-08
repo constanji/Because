@@ -13,13 +13,15 @@ const DEFAULT_CONTEXT_INJECTION = {
         { from: "requestBody", field: "datasourceId" },
         { from: "agentBinding" },
       ],
+      // 与 Because.yaml 中的协议保持一致：arg4=机构编码，arg5=用户问题
       inject: {
         projectId: "projectId",
         arg1: "projectId",
         arg2: "datasourceId",
-        arg4: "question",
+        arg4: "orgCode",
+        arg5: "question",
       },
-      hideFromSchema: ["projectId", "arg1", "arg2"],
+      hideFromSchema: ["projectId", "arg1", "arg2", "arg4"],
     },
     agents: {
       resolve: [
@@ -257,8 +259,12 @@ function persistConversationMcpContext({ userId, conversationId, context }) {
 function applyContextInjection(toolArguments, context, injectMap, hideFromSchema = []) {
   const hidden = new Set(hideFromSchema);
   const result = { ...toolArguments };
+
+  // question 文本的来源：先按 inject 映射反查哪个工具参数承载 question（如新协议的 arg5），
+  // 再回退到通用语义字段。不能再写死 arg4：协议升级后 arg4 已是 orgCode。
+  const questionParam = Object.entries(injectMap).find(([, src]) => src === "question")?.[0];
   const question =
-    result.arg4 ??
+    (questionParam ? result[questionParam] : undefined) ??
     result.question ??
     result.query ??
     result.prompt ??

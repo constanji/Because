@@ -809,30 +809,32 @@ export default function Benchmark() {
                               const handleGenerateDefaultJson = () => {
                                 if (currentTool.inputSchema && currentTool.inputSchema.properties) {
                                   const propKeys = Object.keys(currentTool.inputSchema.properties);
-                                  const requiredKeys = currentTool.inputSchema.required || [];
                                   if (propKeys.length > 0) {
                                     const defaultObj: Record<string, string> = {};
-                                    
-                                    // 针对 becauseai-server 的 ask_data 工具进行特殊处理
-                                    if (selectedModel === 'becauseai-server' && selectedMcpToolName === 'ask_data') {
-                                      const currentDs = datasources.find((ds: any) => ds._id === selectedDatasourceId);
-                                      if (propKeys.includes('arg1')) {
-                                        defaultObj['arg1'] = currentDs?.projectId || '';
+                                    const currentDs = datasources.find((ds: any) => ds._id === selectedDatasourceId);
+                                    const isQuestionLike = (k: string) => /question|query|prompt|input/i.test(k);
+                                    const questionKeys = propKeys.filter(isQuestionLike);
+
+                                    propKeys.forEach((key) => {
+                                      // 数据源关联字段自动填充：projectId / datasourceId 语义化字段，
+                                      // 以及 becauseai-server/ask_data 的兼容位 arg1=projectId、arg2=datasourceId。
+                                      if (key === 'projectId' || (key === 'arg1' && selectedModel === 'becauseai-server' && selectedMcpToolName === 'ask_data')) {
+                                        defaultObj[key] = currentDs?.projectId || '';
+                                      } else if (key === 'datasourceId' || (key === 'arg2' && selectedModel === 'becauseai-server' && selectedMcpToolName === 'ask_data')) {
+                                        defaultObj[key] = selectedDatasourceId || '';
+                                      } else if (isQuestionLike(key)) {
+                                        defaultObj[key] = '{{question}}';
+                                      } else {
+                                        // 其余字段（包括 arg4/orgCode 等）留空：要么用户手填，要么交给后端上下文注入
+                                        defaultObj[key] = '';
                                       }
-                                      if (propKeys.includes('arg2')) {
-                                        defaultObj['arg2'] = selectedDatasourceId || '';
-                                      }
-                                    } else {
-                                      // 默认逻辑：过滤掉 required 的参数，因为我们认为它是 question
-                                      const optionalKeys = propKeys.filter(key => !requiredKeys.includes(key));
-                                      optionalKeys.forEach(key => {
-                                          defaultObj[key] = "";
-                                      });
-                                      // 如果没有可选参数，则把所有的除了最后一个参数都加上去
-                                      if(optionalKeys.length === 0) {
-                                          for(let i=0; i<propKeys.length-1; i++) {
-                                              defaultObj[propKeys[i]] = "";
-                                          }
+                                    });
+
+                                    // 若 schema 完全没有 question 语义字段，把末位 arg* 视作问题位，方便老协议
+                                    if (questionKeys.length === 0) {
+                                      const tail = propKeys[propKeys.length - 1];
+                                      if (tail && defaultObj[tail] === '') {
+                                        defaultObj[tail] = '{{question}}';
                                       }
                                     }
 
@@ -848,9 +850,9 @@ export default function Benchmark() {
                                   <label className="mb-1 block text-xs text-text-secondary flex justify-between items-center">
                                     <span>高级 JSON 参数配置</span>
                                     <div className="flex items-center gap-2">
-                                      <span className="text-text-tertiary">可用占位符: {'{{prompt}}'}, {'{{question}}'}</span>
-                                      <button 
-                                        type="button" 
+                                      <span className="text-text-tertiary">占位符: {'{{prompt}}'}, {'{{question}}'} · 数据源/机构编码会自动注入对应字段</span>
+                                      <button
+                                        type="button"
                                         onClick={handleGenerateDefaultJson}
                                         className="text-xs text-primary hover:underline"
                                       >

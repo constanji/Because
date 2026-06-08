@@ -124,6 +124,7 @@ class BenchmarkService {
               sqlDialect: config.sqlDialect,
               knowledgeDir,
               userId: config.userId,
+              userOrgCode: config.userOrgCode,
               datasourceId: config.datasourceId,
               mcpToolName: config.mcpToolName,
               mcpToolArguments: config.mcpToolArguments,
@@ -318,6 +319,7 @@ class BenchmarkService {
     sqlDialect,
     knowledgeDir,
     userId,
+    userOrgCode,
     datasourceId,
     mcpToolName,
     mcpToolArguments,
@@ -434,7 +436,7 @@ class BenchmarkService {
 
     const appConfig = await getAppConfig();
     const configurable = {
-      user: { id: userId },
+      user: { id: userId, ...(userOrgCode ? { orgCode: userOrgCode } : {}) },
       requestBody: datasourceId ? { datasourceId } : {},
     };
     const finalToolArguments = await resolveAndInjectMcpContext({
