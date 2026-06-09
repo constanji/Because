@@ -4,149 +4,72 @@ import { useAuthContext } from '~/hooks/AuthContext';
 import { SystemRoles } from '@because/data-provider';
 import useAuthRedirect from './useAuthRedirect';
 
-function escapeHtml(unsafe: any): string {
-  if (unsafe == null) return '';
-  const str = typeof unsafe === 'string' ? unsafe : String(unsafe);
-  // 过滤掉 HTML/XML 都不允许的控制字符（保留 \t \n \r），避免 Excel 解析失败
-  const sanitized = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-  return sanitized
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/\r\n|\r|\n/g, '<br/>');
+/**
+ * CSV 字段转义：如果字段包含逗号、双引号或换行符，需要用双引号包裹并将内部双引号转义为 ""
+ */
+function csvEscape(val: any): string {
+  const s = val == null ? '' : String(val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
 }
 
-function generateExcelHtml(details: any[], results: any) {
-  const sheetNames = ['每题详细数据', '总体正确率'];
+/** 生成两段 CSV（每题详细数据 + 总体正确率），用空行分隔 */
+function generateCsv(details: any[], results: any): string {
+  const fmt = (v: any) => (v !== undefined && v !== null ? `${Number(v).toFixed(2)}%` : '-');
+  const lines: string[] = [];
 
-  const detailRows = details
-    .map((item) => {
-      const idx = typeof item.index === 'number' ? item.index : 0;
-      const qid = item.question_id || `item_${idx + 1}`;
-      return `<tr>
-  <td style="mso-number-format:'\\@';">${escapeHtml(qid)}</td>
-  <td>${escapeHtml(item.question)}</td>
-  <td style="mso-number-format:'\\@';">${escapeHtml(item.predictedSQL)}</td>
-  <td style="mso-number-format:'\\@';">${escapeHtml(item.groundTruthSQL)}</td>
-  <td style="text-align:right;">${Number(item.duration) || 0}</td>
-</tr>`;
-    })
-    .join('\n');
+  // ===== 每题详细数据 =====
+  lines.push('每题详细数据');
+  lines.push('问题序号,问题,生成的SQL,标准答案SQL,耗时 (ms)');
 
-  const metrics = Object.entries(results || {});
-  const metricRows = metrics
-    .map(([metricName, res]: [string, any]) => {
-      const fmt = (v: any) => (v !== undefined && v !== null ? `${Number(v).toFixed(2)}%` : '-');
-      const total = res.total !== undefined && res.total !== null ? res.total : '-';
-      const displayName =
-        metricName === 'EX'
-          ? '执行准确率 (EX)'
-          : metricName === 'R-VES'
-            ? '基于奖励的效率分数 (R-VES)'
-            : metricName === 'Soft F1'
-              ? '生成SQL表结构相似度 (Soft F1)'
-              : metricName;
-      return `<tr>
-  <td>${escapeHtml(displayName)}</td>
-  <td>${escapeHtml(fmt(res.accuracy))}</td>
-  <td>${escapeHtml(fmt(res.simple))}</td>
-  <td>${escapeHtml(fmt(res.moderate))}</td>
-  <td>${escapeHtml(fmt(res.challenging))}</td>
-  <td>${escapeHtml(String(total))}</td>
-</tr>`;
-    })
-    .join('\n');
+  for (const item of details || []) {
+    const idx = typeof item.index === 'number' ? item.index : 0;
+    const qid = item.question_id || `item_${idx + 1}`;
+    lines.push([
+      csvEscape(qid),
+      csvEscape(item.question ?? ''),
+      csvEscape(item.predictedSQL ?? ''),
+      csvEscape(item.groundTruthSQL ?? ''),
+      Number(item.duration) || 0,
+    ].join(','));
+  }
 
-  const worksheetXml = sheetNames
-    .map(
-      (name) => `   <x:ExcelWorksheet>
-    <x:Name>${escapeHtml(name)}</x:Name>
-    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
-   </x:ExcelWorksheet>`,
-    )
-    .join('\n');
+  if (!details || details.length === 0) {
+    lines.push('(无数据),,,,');
+  }
 
-  return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:x="urn:schemas-microsoft-com:office:excel"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta http-equiv="Content-Type" content="application/vnd.ms-excel; charset=UTF-8"/>
-<meta charset="UTF-8"/>
-<title>基准测试结果</title>
-<!--[if gte mso 9]><xml>
- <x:ExcelWorkbook>
-  <x:ExcelWorksheets>
-${worksheetXml}
-  </x:ExcelWorksheets>
-  <x:WindowHeight>9000</x:WindowHeight>
-  <x:WindowWidth>13860</x:WindowWidth>
-  <x:ProtectStructure>False</x:ProtectStructure>
-  <x:ProtectWindows>False</x:ProtectWindows>
- </x:ExcelWorkbook>
-</xml><![endif]-->
-<style type="text/css">
-table { border-collapse: collapse; font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; font-size: 11pt; }
-th, td { border: 1px solid #999; padding: 4px 8px; vertical-align: top; mso-data-placement: same-cell; }
-th { background-color: #4F81BD; color: #FFFFFF; font-weight: bold; text-align: center; }
-.sheet-title { font-size: 14pt; font-weight: bold; margin: 0 0 8px 0; }
-</style>
-</head>
-<body>
-<div>
-  <p class="sheet-title">${escapeHtml(sheetNames[0])}</p>
-  <table>
-    <colgroup>
-      <col style="width:100px"/>
-      <col style="width:320px"/>
-      <col style="width:320px"/>
-      <col style="width:320px"/>
-      <col style="width:90px"/>
-    </colgroup>
-    <thead>
-      <tr>
-        <th>问题序号</th>
-        <th>问题</th>
-        <th>生成的SQL</th>
-        <th>标准答案SQL</th>
-        <th>耗时 (ms)</th>
-      </tr>
-    </thead>
-    <tbody>
-${detailRows || '<tr><td colspan="5" style="text-align:center;color:#888;">暂无明细数据</td></tr>'}
-    </tbody>
-  </table>
-</div>
-<br clear="all" style="mso-special-character:line-break;page-break-before:always;"/>
-<div>
-  <p class="sheet-title">${escapeHtml(sheetNames[1])}</p>
-  <table>
-    <colgroup>
-      <col style="width:220px"/>
-      <col style="width:120px"/>
-      <col style="width:120px"/>
-      <col style="width:120px"/>
-      <col style="width:120px"/>
-      <col style="width:90px"/>
-    </colgroup>
-    <thead>
-      <tr>
-        <th>指标</th>
-        <th>总体准确率</th>
-        <th>简单准确率</th>
-        <th>中等准确率</th>
-        <th>困难准确率</th>
-        <th>总题数</th>
-      </tr>
-    </thead>
-    <tbody>
-${metricRows || '<tr><td colspan="6" style="text-align:center;color:#888;">暂无指标数据</td></tr>'}
-    </tbody>
-  </table>
-</div>
-</body>
-</html>`;
+  // ===== 总体正确率 =====
+  lines.push('');
+  lines.push('总体正确率');
+  lines.push('指标,总体准确率,简单准确率,中等准确率,困难准确率,总题数');
+
+  for (const [metricName, res] of Object.entries(results || {}) as [string, any][]) {
+    const total = res.total !== undefined && res.total !== null ? res.total : '-';
+    const displayName =
+      metricName === 'EX'
+        ? '执行准确率 (EX)'
+        : metricName === 'R-VES'
+          ? '基于奖励的效率分数 (R-VES)'
+          : metricName === 'Soft F1'
+            ? '生成SQL表结构相似度 (Soft F1)'
+            : metricName;
+    lines.push([
+      csvEscape(displayName),
+      fmt(res.accuracy),
+      fmt(res.simple),
+      fmt(res.moderate),
+      fmt(res.challenging),
+      String(total),
+    ].join(','));
+  }
+
+  if (!results || Object.keys(results).length === 0) {
+    lines.push('(无数据),,,,,');
+  }
+
+  return lines.join('\n');
 }
 
 export default function Result() {
@@ -171,15 +94,14 @@ export default function Result() {
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       const data = await response.json();
       
-      const htmlContent = generateExcelHtml(data.details || [], data.results);
-      // 关键：UTF-8 BOM (﻿) 让所有版本的 Office 都能正确识别 UTF-8 编码，
-      // 否则中文 Windows 上低版本 Office 会按 GBK 解码导致中文乱码。
+      const csvContent = generateCsv(data.details || [], data.results);
+      // UTF-8 BOM 确保中文 Windows 上的 Excel 正确识别编码，不会出现中文乱码
       const BOM = '﻿';
-      const blob = new Blob([BOM, htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `benchmark_result_${taskId}.xls`;
+      a.download = `benchmark_result_${taskId}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -321,7 +243,7 @@ export default function Result() {
               disabled={exporting}
               className="btn btn-neutral border-token-border-light rounded-lg px-4 py-2 text-sm font-medium hover:bg-surface-hover transition-colors"
             >
-              {exporting ? '正在导出...' : '导出 Excel'}
+              {exporting ? '正在导出...' : '导出 CSV'}
             </button>
           </div>
           <h1 className="text-3xl font-bold text-text-primary flex items-center gap-2">
