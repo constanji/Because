@@ -582,9 +582,9 @@ export const eAgentOptionsSchema = z.nativeEnum(EAgent);
 export const tAgentOptionsSchema = z.object({
   agent: z.string().default(EAgent.functions),
   skipCompletion: z.boolean().default(agentOptionSettings.skipCompletion.default),
-  model: z.string(),
+  model: z.string().optional(),
   temperature: z.number().default(agentOptionSettings.temperature.default),
-});
+}).passthrough();
 
 export const tMessageSchema = z.object({
   messageId: z.string(),
