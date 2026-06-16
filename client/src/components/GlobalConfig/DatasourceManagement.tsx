@@ -29,6 +29,7 @@ import {
   Trash,
   Info,
   Sparkles,
+  Star,
 } from "lucide-react";
 
 const DAT_API_BASE =
@@ -57,6 +58,11 @@ interface DatDatasource {
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+interface DatGlobalConfig {
+  default_project_id?: string | null;
+  default_datasource_id?: string | null;
 }
 
 interface LightSchemaColumn {
@@ -124,6 +130,12 @@ export default function DatasourceManagement() {
   const { token } = useAuthContext();
   const [datasources, setDatasources] = useState<DatDatasource[]>([]);
   const [projects, setProjects] = useState<DatProject[]>([]);
+  const [defaultDatasourceId, setDefaultDatasourceId] = useState<string | null>(
+    null,
+  );
+  const [isSettingDefaultId, setIsSettingDefaultId] = useState<string | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [editingDatasource, setEditingDatasource] =
     useState<Partial<DatDatasource> | null>(null);
@@ -267,6 +279,20 @@ export default function DatasourceManagement() {
     }
   }, [getApiBase, getHeaders]);
 
+  const fetchGlobalConfig = useCallback(async () => {
+    try {
+      const response = await fetch(`${DAT_API_BASE}/api/v1/config/global`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "获取默认配置失败");
+      }
+      const data: DatGlobalConfig = await response.json();
+      setDefaultDatasourceId(data.default_datasource_id || null);
+    } catch (error) {
+      console.warn("Error fetching global config:", error);
+    }
+  }, []);
+
   const fetchDatasources = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -299,7 +325,8 @@ export default function DatasourceManagement() {
   useEffect(() => {
     fetchProjects();
     fetchDatasources();
-  }, [fetchProjects, fetchDatasources]);
+    fetchGlobalConfig();
+  }, [fetchProjects, fetchDatasources, fetchGlobalConfig]);
 
   // ============ DAT API Functions ============
 
@@ -754,6 +781,9 @@ export default function DatasourceManagement() {
 
       showToast({ message: "数据源删除成功", status: "success" });
       setDatasources((prev) => prev.filter((p) => p._id !== datasource._id));
+      if (defaultDatasourceId === datasource._id) {
+        setDefaultDatasourceId(null);
+      }
     } catch (error) {
       console.error("Error deleting datasource:", error);
       showToast({
@@ -764,6 +794,50 @@ export default function DatasourceManagement() {
       setDeletingId(null);
     }
   };
+
+  const setDefaultDatasource = useCallback(
+    async (datasource: DatDatasource) => {
+      const projectIdToSet = datasource.projectId;
+      if (!projectIdToSet) {
+        showToast({ message: "无法获取项目ID，请确保数据源关联了项目", status: "error" });
+        return;
+      }
+
+      setIsSettingDefaultId(datasource._id);
+      try {
+        const response = await fetch(`${DAT_API_BASE}/api/v1/config/global`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            default_project_id: projectIdToSet,
+            default_datasource_id: datasource._id,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || "设置默认数据源失败");
+        }
+
+        setDefaultDatasourceId(datasource._id);
+        showToast({
+          message: `已将 "${datasource.name}" 设为默认数据源`,
+          status: "success",
+        });
+      } catch (error) {
+        console.error("Error setting default datasource:", error);
+        showToast({
+          message: `设置默认数据源失败: ${error instanceof Error ? error.message : "未知错误"}`,
+          status: "error",
+        });
+      } finally {
+        setIsSettingDefaultId(null);
+      }
+    },
+    [showToast],
+  );
 
   const updateEditing = (key: keyof DatDatasource, value: any) => {
     setEditingDatasource((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -957,10 +1031,36 @@ export default function DatasourceManagement() {
                           {getProjectName(ds.projectId)}
                         </span>
                         <span>{ds.provider}</span>
+                        {defaultDatasourceId === ds._id && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                            <Star className="h-3 w-3 fill-current" />
+                            默认
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setDefaultDatasource(ds)}
+                      disabled={defaultDatasourceId === ds._id || isSettingDefaultId === ds._id}
+                      className={cn(
+                        "rounded p-1.5 hover:bg-surface-hover",
+                        defaultDatasourceId === ds._id
+                          ? "text-yellow-500"
+                          : "text-text-secondary",
+                      )}
+                      title={defaultDatasourceId === ds._id ? "默认数据源" : "设为默认"}
+                    >
+                      <Star
+                        className={cn(
+                          "h-4 w-4",
+                          defaultDatasourceId === ds._id && "fill-current",
+                          isSettingDefaultId === ds._id && "animate-pulse",
+                        )}
+                      />
+                    </button>
                     <button
                       type="button"
                       onClick={() => openDatasourceDetail(ds)}
