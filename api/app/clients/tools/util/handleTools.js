@@ -42,6 +42,7 @@ const {
   SqlExecutor,
   BeCause,
   ChartGenerator,
+  EChartsGenerator,
   ReportGenerator,
   AttributionAnalysis,
 } = require('../');
@@ -196,6 +197,7 @@ const loadTools = async ({
     bazi_astrology: BaziAstrology,
     sql_executor: SqlExecutor,
     chart_generator: ChartGenerator,
+    echarts_generator: EChartsGenerator,
     report_generator: ReportGenerator,
     attribution_analysis: AttributionAnalysis,
   };

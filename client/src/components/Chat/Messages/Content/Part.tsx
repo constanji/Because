@@ -17,6 +17,7 @@ import Container from './Container';
 import WebSearch from './WebSearch';
 import ToolCall from './ToolCall';
 import G2Chart from './G2Chart';
+import EChartsChart from './EChartsChart';
 import ReportPreview from './ReportPreview';
 import ImageGen from './ImageGen';
 import Image from './Image';
@@ -147,6 +148,10 @@ const Part = memo(
       } else if (isToolCall && toolCall.name === "chart_generator") {
         return (
           <G2Chart output={toolCall.output ?? ""} isSubmitting={isSubmitting} />
+        );
+      } else if (isToolCall && toolCall.name === "echarts_generator") {
+        return (
+          <EChartsChart output={toolCall.output ?? ""} isSubmitting={isSubmitting} />
         );
       } else if (isToolCall && toolCall.name === "report_generator") {
         const raw = toolCall.output ?? "";

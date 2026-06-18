@@ -140,6 +140,12 @@ const ContentParts = memo(
           }
           if (
             toolCall &&
+            (toolCall as { name?: string }).name === "echarts_generator"
+          ) {
+            return true;
+          }
+          if (
+            toolCall &&
             (toolCall as { name?: string }).name === "report_generator"
           ) {
             return true;
