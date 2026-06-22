@@ -335,10 +335,15 @@ async function resolveAndInjectMcpContext({
     return args;
   }
 
-  // 把当前用户的机构编码带到上下文，让 inject 映射 `arg4: orgCode` 等规则直接生效
+  // 把机构编码带到上下文，让 inject 映射 `arg4: orgCode` 等规则直接生效
+  // 优先级：请求体 orgCode（接口传参） > 用户表 orgCode（JWT 解析） > 已解析的 context.orgCode
+  const requestBodyOrgCode = configurable?.requestBody?.orgCode;
   const userOrgCode = configurable?.user?.orgCode;
-  if (userOrgCode != null && userOrgCode !== '' && context.orgCode == null) {
-    context.orgCode = String(userOrgCode);
+  const candidate = requestBodyOrgCode != null && requestBodyOrgCode !== ''
+    ? requestBodyOrgCode
+    : userOrgCode;
+  if (candidate != null && candidate !== '' && context.orgCode == null) {
+    context.orgCode = String(candidate);
   }
 
   logger.info(

@@ -6,26 +6,49 @@ const { logger } = require("@because/data-schemas");
  * EChartsGenerator Tool - ECharts 图表生成工具
  *
  * 接收 LLM 生成的 ECharts Option JSON 配置，验证后返回配置供前端 EChartsChart 组件渲染。
- * 支持所有 ECharts 图表类型，覆盖归因分析五大核心场景：
- *
- * 场景1: 多维度对比分析 - 柱状图/条形图/堆叠图
- * 场景2: 同比/环比趋势分析 - 折线图/面积图/柱线混合
- * 场景3: 多维度+时间轴组合归因 - 组合图/多轴图
- * 场景4: 指标构成/分布归因 - 饼图/环图/漏斗图/热力图
- * 场景5: 散点图/雷达图/仪表盘/瀑布图等辅助分析
+ * 优先使用此工具而非 chart_generator：需要 dataZoom/visualMap 强交互、地图/桑基图/旭日图等复杂可视化时。
  */
 class EChartsGenerator extends Tool {
   name = "echarts_generator";
 
   description =
-    "ECharts 图表生成工具，接收 ECharts Option JSON 配置在聊天消息中生成交互式 ECharts 图表。" +
-    "支持所有 ECharts 图表类型：柱状图（bar）、折线图（line）、面积图（area）、饼图（pie）、环图（ring）、" +
-    "散点图（scatter）、雷达图（radar）、热力图（heatmap）、漏斗图（funnel）、仪表盘（gauge）、" +
-    "瀑布图、箱线图（boxplot）、桑基图（sankey）、旭日图（sunburst）、地图（map）等。" +
-    "传入图表标题和完整的 ECharts Option JSON 即可生成图表。" +
-    "用于展示多维度对比分析、同比/环比趋势归因、维度贡献度分析、构成/分布归因等数据可视化场景。" +
-    "当需要更丰富的交互效果、缩放/平移、数据区域缩放（dataZoom）、视觉映射（visualMap）" +
-    "或复杂的地图可视化时，优先使用此工具而非 chart_generator。";
+    "ECharts 图表生成工具。传入 title + echartsOption 生成交互式图表嵌入聊天。\n\n" +
+    "支持类型：柱状图、折线图、面积图、饼图/环图、散点图、雷达图、热力图、漏斗图、仪表盘、瀑布图、箱线图、桑基图、旭日图、地图等。\n\n" +
+    "## 图表生成规则（强制执行，违反任何一条视为违规）\n\n" +
+    "### 1. 何时必须画图（按顺序判断，命中即执行）\n" +
+    "- 数据有 ≥2 行且存在维度字段（brchna/地区/渠道等）有 ≥2 个不同值 → 必须画图\n" +
+    "- 数据只有 1 行但包含时间对比字段（yd_value/m_begin_value/q_begin_value/y_begin_value/ly_value 任意一个非空）→ 必须画图\n" +
+    "- 数据只有 1 行且无任何时间对比字段 → 禁止画图，告知用户数据粒度不足\n\n" +
+    "### 2. 宽格式时间序列转换（1行数据含时间对比字段时必须执行，不可跳过）\n" +
+    "将时间对比字段转换为长格式，每条记录含 日期、指标值、对比类型：\n" +
+    "- index_value → 日期=data_dt，类型=当前\n" +
+    "- yd_value → 日期=data_dt减1天，类型=上日\n" +
+    "- m_begin_value → 日期=上月末，类型=上月末\n" +
+    "- q_begin_value → 日期=上季末，类型=上季末\n" +
+    "- y_begin_value → 日期=上年末(12月31日)，类型=上年末\n" +
+    "- ly_value → 日期=去年同期，类型=上年同期\n" +
+    "转换后按日期升序排列。null/不存在的字段跳过。有效记录≥3条→生成趋势图。\n\n" +
+    "### 3. 图表类型选型\n" +
+    "- ≥2个维度值对比 → 分组柱形图/横向条形图\n" +
+    "- ≥3个时间点序列 → 折线图/面积图\n" +
+    "- ≥3行Top N排名 → 横向条形图\n" +
+    "- 各部分占整体比例 → 饼图/环图\n" +
+    "- 绝对值+增长率 → 柱线混合双轴图\n\n" +
+    "### 4. 数据真实性（最高优先级，严禁违反）\n" +
+    "- 图表数值必须原封不动来自 ask_data 返回结果\n" +
+    "- 严禁：把合计值除以N估算、凭空编造数据行、拆分汇总行凑图\n" +
+    "- 1行合计且无时间对比字段 → 不画图，告知用户\n" +
+    "- 🚫 严禁使用任何 emoji 表情符号（包括 📊📈📉🔍💡✅❌ 等）\n\n" +
+    "### 5. 字段命名与交互\n" +
+    "- 图表数据字段名必须使用中文，禁止展示数据库原始英文字段名\n" +
+    "- 标题需具备业务洞察力\n" +
+    "- 必须配置 tooltip（提示框）\n" +
+    "- 推荐配置 toolbox（至少含 saveAsImage）\n" +
+    "- 数据量大时推荐 dataZoom\n\n" +
+    "### 6. ECharts Option 格式要点\n" +
+    "- 必须包含 series（系列数组）和对应坐标系（xAxis/yAxis 等）\n" +
+    "- series 中每个系列的 type 指定图表类型\n" +
+    "- 参考标准格式：https://echarts.apache.org/zh/option.html";
 
   schema = z.object({
     title: z

@@ -861,6 +861,7 @@ class AgentClient extends BaseClient {
             conversationId: this.conversationId,
             parentMessageId: this.parentMessageId,
             datasourceId: this.options.req.body?.datasourceId,
+            orgCode: this.options.req.body?.orgCode,
           },
           user: createSafeUser(this.options.req.user),
         },

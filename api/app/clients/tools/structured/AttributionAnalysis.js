@@ -6,28 +6,58 @@ const { logger } = require("@because/data-schemas");
  * AttributionAnalysis Tool - 指标异动归因分析工具
  *
  * 基于"加法型 / 乘法型 / 除法型"三类指标归因方法论，提供真实计算能力的归因分析闭环。
- *
- * 核心能力：
- * 1. pre_check            — 数据可信性预检（数据质量 / 统计口径 / 外部因素）
- * 2. indicator_type_detect — 自动识别指标归因结构类型
- * 3. contribution_analysis — 加法型：贡献度分析（Y = A + B + C）
- * 4. chain_decomposition   — 乘法型：链式分解法（Y = A × B × C）
- * 5. differential_decomposition — 除法型：差分分解法（R = N / D）
- * 6. scenario_simulation   — 除法型：情景模拟法
- * 7. drill_down            — 多维度下钻分析
- * 8. convergence_judge     — 归因收敛判断
  */
 class AttributionAnalysis extends Tool {
   name = "attribution_analysis";
 
   description =
-    "指标异动归因分析工具集合。基于加法型（Y=A+B+C）、乘法型（Y=A×B×C）、除法型（R=N/D）" +
-    "三类归因方法论，提供真实计算能力。支持的 action：" +
-    "pre_check（数据可信性预检）、indicator_type_detect（识别指标类型）、" +
-    "contribution_analysis（加法型贡献度分析）、chain_decomposition（乘法型链式分解）、" +
-    "differential_decomposition（除法型差分分解）、scenario_simulation（除法型情景模拟）、" +
-    "drill_down（多维度下钻）、convergence_judge（归因收敛判断）。" +
-    "智能体必须先通过 ask_data 工具获得明细数据，然后将数据传入本工具进行归因计算，实现闭环分析。";
+    "指标异动归因分析工具。基于加法型(Y=A+B+C)、乘法型(Y=A×B×C)、除法型(R=N/D)三类归因方法论。\n\n" +
+    "支持 action：pre_check、indicator_type_detect、contribution_analysis、chain_decomposition、" +
+    "differential_decomposition、scenario_simulation、drill_down、convergence_judge。\n\n" +
+    "## 归因分析规则（强制执行）\n\n" +
+    "### 何时触发归因分析\n" +
+    "- 用户明确问原因/为什么/怎么回事/为何异常\n" +
+    "- 用户关注波动/异常（突然下降/明显上涨/不正常）\n" +
+    "- 用户要求分析/拆解/解释\n" +
+    "- 用户给了数据并要求解读\n" +
+    "- 一旦触发，不允许只查一条数据就结束\n\n" +
+    "### 归因闭环（必须按顺序执行）\n" +
+    "第1步 pre_check → 第2步 indicator_type_detect → 第3步归因计算（三选一）→ 第4步 drill_down（如需）→ 第5步 convergence_judge → 第6步 图表生成\n\n" +
+    "**第1步：pre_check（数据可信性预检）**\n" +
+    "- 即使没有明确问题也必须调用，传入空字符串即可\n" +
+    "- can_proceed=false → 排除干扰因素后重试\n\n" +
+    "**第2步：indicator_type_detect（识别指标类型）**\n" +
+    "- 必须先判断类型再归因，同一指标只用一种结构\n" +
+    "- 能明确判断时通过 sub_indicator_type_hint 直接指定\n" +
+    "- 不确定时通过 ask_data 查询业务字段推导\n\n" +
+    "**第3步：归因计算（根据类型三选一）**\n" +
+    "- 加法型 → contribution_analysis，data 格式：[{name, current_value, baseline_value}, ...]\n" +
+    "- 乘法型 → chain_decomposition，factors 格式：[{name, current_value, baseline_value}, ...]，必须按业务逻辑排序\n" +
+    "- 除法型 → differential_decomposition + scenario_simulation，分别提供分子分母当前值和基准值\n\n" +
+    "**第4步：drill_down（多维度下钻）**\n" +
+    "- 每次至少下钻 2-3 个维度\n" +
+    "- 发现异常聚集时继续下钻更底层明细\n\n" +
+    "**第5步：convergence_judge（收敛判断）**\n" +
+    "- is_converged=true → 进入图表生成\n" +
+    "- is_converged=false → 回到第4步继续下钻\n\n" +
+    "**第6步：图表生成**\n" +
+    "- 归因分析至少生成 2 张图表（趋势图 + 维度对比图）\n\n" +
+    "### 强制执行原则\n" +
+    "1. 禁止\"数据不足\"式逃避：字段存在就必须通过 ask_data 查询\n" +
+    "2. 必须先判断指标类型再归因，禁止混用结构\n" +
+    "3. 拒绝扁平化归因：时间序列维度（必查）+ 结构占比维度（必查）+ 多角度关联\n" +
+    "4. 高频调用归因算法：喂足够多维的 data 数组，不能只有两三行总计\n" +
+    "5. 警惕三类陷阱：掩盖效应（加法型）、放大效应（乘法型）、稀释效应（除法型）\n" +
+    "6. 所有结论必须有数据+归因计算双重支撑，推断≠猜测\n" +
+    "7. 图表必须服务于归因结论\n\n" +
+    "### 报告结构（归因分析完成后必须调用 report_generator）\n" +
+    "1. 核心结论（2-3句话：发生了什么+主要原因）\n" +
+    "2. 指标变化概览（趋势+趋势图）\n" +
+    "3. 主导因子分析（贡献度对比图）\n" +
+    "4. 异常/关键点下钻（明细下钻图）\n" +
+    "5. 多维关联发现（结构性变化图）\n" +
+    "6. 行动建议（短期止血+中长期优化）\n" +
+    "⚠️ 未完成归因闭环前禁止调用 report_generator。";
 
   schema = z.object({
     action: z
