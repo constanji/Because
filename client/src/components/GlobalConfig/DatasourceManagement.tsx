@@ -30,6 +30,9 @@ import {
   Info,
   Sparkles,
   Star,
+  Download,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 
 const DAT_API_BASE =
@@ -230,6 +233,25 @@ export default function DatasourceManagement() {
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<Partial<DatasourcePrompt> | null>(null);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+
+  // ====== Import from Datasource State ======
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importStep, setImportStep] = useState<"datasource" | "table" | "result">("datasource");
+  const [importDatasources, setImportDatasources] = useState<DatDatasource[]>([]);
+  const [importSelectedDs, setImportSelectedDs] = useState<string>("");
+  const [importTables, setImportTables] = useState<string[]>([]);
+  const [importSelectedTable, setImportSelectedTable] = useState<string>("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [importColumns, setImportColumns] = useState<{
+    tableName: string;
+    columns: { name: string; type: string }[];
+    valid: boolean;
+    message: string;
+  } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    upserted: number;
+    totalEntries: number;
+  } | null>(null);
 
   // Filtered schemas based on search
   const filteredSchemas = useMemo(() => {
@@ -531,6 +553,132 @@ export default function DatasourceManagement() {
       });
     }
   }, [viewingDatasource, showToast]);
+
+  // ============ Import from Datasource Functions ============
+
+  const openImportModal = useCallback(async () => {
+    if (!viewingDatasource?.projectId) {
+      showToast({ message: "数据源尚未关联项目", status: "warning" });
+      return;
+    }
+    setImportModalVisible(true);
+    setImportStep("datasource");
+    setImportSelectedDs("");
+    setImportTables([]);
+    setImportSelectedTable("");
+    setImportColumns(null);
+    setImportResult(null);
+    setImportLoading(true);
+    try {
+      const res = await fetch(`${getApiBase()}/api/dat-datasources`, {
+        method: "GET",
+        headers: getHeaders(),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("加载数据源列表失败");
+      const data = await res.json();
+      setImportDatasources(data.datasources || []);
+    } catch (e) {
+      showToast({
+        message: `加载数据源列表失败: ${e instanceof Error ? e.message : "未知错误"}`,
+        status: "error",
+      });
+    } finally {
+      setImportLoading(false);
+    }
+  }, [viewingDatasource, getApiBase, getHeaders, showToast]);
+
+  const onImportDsChange = useCallback(
+    async (dsId: string) => {
+      setImportSelectedDs(dsId);
+      setImportSelectedTable("");
+      setImportColumns(null);
+      if (!dsId) return;
+      setImportLoading(true);
+      try {
+        const res = await fetch(
+          `${DAT_API_BASE}/api/v1/datasources/${dsId}/tables`,
+        );
+        if (!res.ok) throw new Error(`加载表列表失败 status: ${res.status}`);
+        const tables: string[] = await res.json();
+        setImportTables(tables || []);
+      } catch (e) {
+        showToast({
+          message: `加载表列表失败: ${e instanceof Error ? e.message : "未知错误"}`,
+          status: "error",
+        });
+      } finally {
+        setImportLoading(false);
+      }
+    },
+    [showToast],
+  );
+
+  const onImportTableChange = useCallback(
+    async (tableName: string) => {
+      setImportSelectedTable(tableName);
+      setImportColumns(null);
+      if (!tableName || !importSelectedDs) return;
+      setImportLoading(true);
+      try {
+        const res = await fetch(
+          `${DAT_API_BASE}/api/v1/datasources/${importSelectedDs}/tables/${tableName}/columns`,
+        );
+        if (!res.ok) throw new Error(`校验表结构失败 status: ${res.status}`);
+        const data = await res.json();
+        setImportColumns(data);
+      } catch (e) {
+        showToast({
+          message: `校验表结构失败: ${e instanceof Error ? e.message : "未知错误"}`,
+          status: "error",
+        });
+      } finally {
+        setImportLoading(false);
+      }
+    },
+    [importSelectedDs, showToast],
+  );
+
+  const handleImportFromTable = useCallback(async () => {
+    if (!viewingDatasource?.projectId || !importSelectedDs || !importSelectedTable) {
+      showToast({ message: "请选择数据源和表", status: "warning" });
+      return;
+    }
+    if (!importColumns?.valid) {
+      showToast({ message: "表结构校验未通过，无法导入", status: "warning" });
+      return;
+    }
+    setImportLoading(true);
+    try {
+      const res = await fetch(`${DAT_API_BASE}/api/v1/index/entries/import-from-table`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: viewingDatasource.projectId,
+          datasourceId: importSelectedDs,
+          tableName: importSelectedTable,
+        }),
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `HTTP error! status: ${res.status}`);
+      }
+      const result = await res.json();
+      setImportResult(result);
+      setImportStep("result");
+      showToast({
+        message: `导入成功:写入 ${result.upserted} 条，展开 ${result.totalEntries} 条`,
+        status: "success",
+      });
+    } catch (e) {
+      showToast({
+        message: `导入失败: ${e instanceof Error ? e.message : "未知错误"}`,
+        status: "error",
+      });
+    } finally {
+      setImportLoading(false);
+    }
+  }, [viewingDatasource, importSelectedDs, importSelectedTable, importColumns, showToast]);
 
   // ============ Prompts Management Functions ============
 
@@ -1857,6 +2005,29 @@ export default function DatasourceManagement() {
                             {isProcessing ? "处理中..." : "开始执行"}
                           </Button>
                         </div>
+                        <div className="flex items-center gap-4 p-3 rounded-lg hover:bg-surface-hover transition-colors">
+                          <div className="w-10 h-10 rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                            <Download className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h5 className="font-medium text-sm text-text-primary">
+                              从数据源导入
+                            </h5>
+                            <p className="text-xs text-text-tertiary">
+                              从已连接的数据源表 kpi_info 批量导入指标库。
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={openImportModal}
+                            disabled={
+                              isProcessing || !viewingDatasource.projectId
+                            }
+                            className="btn btn-neutral text-sm"
+                          >
+                            {isProcessing ? "处理中..." : "开始导入"}
+                          </Button>
+                        </div>
                         <div className="border-t border-border-light pt-4 mt-4">
                           <button
                             type="button"
@@ -2045,6 +2216,270 @@ export default function DatasourceManagement() {
                   )}
                 </div>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====== Import from Datasource Modal ====== */}
+      {importModalVisible && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-border-light bg-surface-primary shadow-lg flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border-light p-4">
+              <h3 className="text-lg font-semibold text-text-primary">
+                从数据源表导入指标库
+              </h3>
+              <button
+                type="button"
+                onClick={() => setImportModalVisible(false)}
+                className="rounded p-1 text-text-secondary hover:bg-surface-hover"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Steps Indicator */}
+            <div className="px-4 pt-4">
+              <div className="flex items-center justify-between">
+                {[
+                  { key: "datasource", label: "选择数据源" },
+                  { key: "table", label: "选择表并校验" },
+                  { key: "result", label: "导入完成" },
+                ].map((step, idx, arr) => {
+                  const isActive = step.key === importStep;
+                  const isPast =
+                    arr.findIndex((s) => s.key === importStep) > idx;
+                  return (
+                    <div key={step.key} className="flex items-center flex-1">
+                      <div className="flex flex-col items-center flex-1">
+                        <div
+                          className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors",
+                            isActive
+                              ? "border-blue-500 bg-blue-500 text-white"
+                              : isPast
+                                ? "border-green-500 bg-green-500 text-white"
+                                : "border-gray-300 text-gray-400 dark:border-gray-600",
+                          )}
+                        >
+                          {isPast ? <Check className="h-4 w-4" /> : idx + 1}
+                        </div>
+                        <span
+                          className={cn(
+                            "text-xs mt-1",
+                            isActive
+                              ? "text-blue-600 font-medium"
+                              : isPast
+                                ? "text-green-600"
+                                : "text-text-tertiary",
+                          )}
+                        >
+                          {step.label}
+                        </span>
+                      </div>
+                      {idx < arr.length - 1 && (
+                        <div
+                          className={cn(
+                            "h-0.5 flex-1 mx-2",
+                            isPast ? "bg-green-500" : "bg-gray-200 dark:bg-gray-700",
+                          )}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {/* Step 1: Select Datasource */}
+              {importStep === "datasource" && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-text-primary">
+                    选择数据源
+                  </label>
+                  {importLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <RefreshCw className="h-5 w-5 animate-spin text-text-tertiary" />
+                    </div>
+                  ) : (
+                    <select
+                      value={importSelectedDs}
+                      onChange={(e) => onImportDsChange(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    >
+                      <option value="">请选择数据源</option>
+                      {importDatasources.map((ds) => (
+                        <option key={ds._id} value={ds._id}>
+                          {ds.name} ({ds.provider})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      type="button"
+                      disabled={!importSelectedDs || importTables.length === 0}
+                      onClick={() => setImportStep("table")}
+                      className="btn btn-primary flex items-center gap-1"
+                    >
+                      下一步
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Select Table & Validate */}
+              {importStep === "table" && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-text-primary">
+                    选择表（如 kpi_info）
+                  </label>
+                  {importLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <RefreshCw className="h-5 w-5 animate-spin text-text-tertiary" />
+                    </div>
+                  ) : (
+                    <select
+                      value={importSelectedTable}
+                      onChange={(e) => onImportTableChange(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    >
+                      <option value="">请选择表</option>
+                      {importTables.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Schema Validation Result */}
+                  {importColumns && (
+                    <div className="mt-4">
+                      <div
+                        className={cn(
+                          "rounded-lg border p-3",
+                          importColumns.valid
+                            ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
+                            : "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20",
+                        )}
+                      >
+                        <div className="flex items-start gap-2">
+                          {importColumns.valid ? (
+                            <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                          )}
+                          <div>
+                            <h5
+                              className={cn(
+                                "font-medium text-sm",
+                                importColumns.valid
+                                  ? "text-green-700 dark:text-green-400"
+                                  : "text-red-700 dark:text-red-400",
+                              )}
+                            >
+                              {importColumns.valid
+                                ? "Schema 校验通过"
+                                : "Schema 校验失败"}
+                            </h5>
+                            <p
+                              className={cn(
+                                "text-xs mt-0.5",
+                                importColumns.valid
+                                  ? "text-green-600 dark:text-green-300"
+                                  : "text-red-600 dark:text-red-300",
+                              )}
+                            >
+                              {importColumns.valid
+                                ? `表 ${importColumns.tableName} 包含 ${importColumns.columns.length} 列，符合 kpi_info 规范。`
+                                : importColumns.message}
+                            </p>
+                          </div>
+                        </div>
+                        {importColumns.columns?.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1">
+                            {importColumns.columns.map((c) => (
+                              <span
+                                key={c.name}
+                                className="inline-flex items-center rounded bg-surface-secondary px-2 py-0.5 text-xs text-text-secondary"
+                              >
+                                {c.name}{" "}
+                                <small className="text-text-tertiary ml-1">
+                                  ({c.type})
+                                </small>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex justify-between">
+                    <Button
+                      type="button"
+                      onClick={() => setImportStep("datasource")}
+                      className="btn btn-neutral flex items-center gap-1"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      上一步
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={!importColumns?.valid || importLoading}
+                      onClick={handleImportFromTable}
+                      className="btn btn-primary"
+                    >
+                      {importLoading ? "导入中..." : "开始导入"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Import Result */}
+              {importStep === "result" && importResult && (
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="h-8 w-8" />
+                  </div>
+                  <h4 className="text-lg font-semibold text-text-primary mb-2">
+                    导入成功
+                  </h4>
+                  <p className="text-sm text-text-secondary mb-4">
+                    从数据源表成功导入指标库
+                  </p>
+                  <div className="inline-flex gap-6 text-sm">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {importResult.upserted}
+                      </div>
+                      <div className="text-xs text-text-tertiary">写入条数</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {importResult.totalEntries}
+                      </div>
+                      <div className="text-xs text-text-tertiary">
+                        展开口径条目
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-6">
+                    <Button
+                      type="button"
+                      onClick={() => setImportModalVisible(false)}
+                      className="btn btn-primary"
+                    >
+                      关闭
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
