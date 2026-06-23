@@ -20,6 +20,7 @@ const SqlExecutor = require("./structured/SqlExecutor");
 const BeCause = require("./structured/BeCause");
 const ChartGenerator = require("./structured/ChartGenerator");
 const EChartsGenerator = require("./structured/EChartsGenerator");
+const EChartsGeneratorAPP = require("./structured/EChartsGeneratorAPP");
 const ReportGenerator = require("./structured/ReportGenerator");
 const AttributionAnalysis = require("./structured/AttributionAnalysis");
 
@@ -45,6 +46,7 @@ module.exports = {
   BeCause,
   ChartGenerator,
   EChartsGenerator,
+  EChartsGeneratorAPP,
   ReportGenerator,
   AttributionAnalysis,
 };

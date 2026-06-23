@@ -43,6 +43,7 @@ const {
   BeCause,
   ChartGenerator,
   EChartsGenerator,
+  EChartsGeneratorAPP,
   ReportGenerator,
   AttributionAnalysis,
 } = require('../');
@@ -186,8 +187,8 @@ const loadTools = async ({
     google: GoogleSearchAPI,
     open_weather: OpenWeather,
     wolfram: StructuredWolfram,
-    'stable-diffusion': StructuredSD,
-    'azure-ai-search': StructuredACS,
+    "stable-diffusion": StructuredSD,
+    "azure-ai-search": StructuredACS,
     traversaal_search: TraversaalSearch,
     tavily_search_results_json: TavilySearchResults,
     speckit: Speckit,
@@ -198,6 +199,7 @@ const loadTools = async ({
     sql_executor: SqlExecutor,
     chart_generator: ChartGenerator,
     echarts_generator: EChartsGenerator,
+    echarts_generator_app: EChartsGeneratorAPP,
     report_generator: ReportGenerator,
     attribution_analysis: AttributionAnalysis,
   };
