@@ -286,6 +286,30 @@ export default function ProjectsManagement() {
     const [orgNodesSaving, setOrgNodesSaving] = useState(false);
     const [orgNodesLoading, setOrgNodesLoading] = useState(false);
 
+    // Org Nodes — 从数据源表导入
+    const [orgTableImportModalVisible, setOrgTableImportModalVisible] = useState(false);
+    const [orgTableImportStep, setOrgTableImportStep] = useState<'datasource' | 'table' | 'result'>('datasource');
+    const [orgTableImportDatasources, setOrgTableImportDatasources] = useState<any[]>([]);
+    const [orgTableImportSelectedDs, setOrgTableImportSelectedDs] = useState('');
+    const [orgTableImportTables, setOrgTableImportTables] = useState<string[]>([]);
+    const [orgTableImportSelectedTable, setOrgTableImportSelectedTable] = useState('');
+    const [orgTableImportLoading, setOrgTableImportLoading] = useState(false);
+    const [orgTableImportColumns, setOrgTableImportColumns] = useState<{
+        tableName: string;
+        columns: { name: string; type: string }[];
+        valid: boolean;
+        message: string;
+    } | null>(null);
+    const [orgTableImportResult, setOrgTableImportResult] = useState<{
+        imported: number;
+        dataDt: string;
+    } | null>(null);
+
+    // Org Nodes — 数据快照管理
+    const [orgDataTimes, setOrgDataTimes] = useState<string[]>([]);
+    const [orgActiveDataDt, setOrgActiveDataDt] = useState('');
+    const [orgActiveDtIsManual, setOrgActiveDtIsManual] = useState(false);
+
     // 获取 API 基础路径
     const getApiBase = useCallback(() => {
         const baseEl = document.querySelector('base');
@@ -555,6 +579,9 @@ export default function ProjectsManagement() {
         setOrgNodesJsonText(ORG_NODES_TEMPLATE);
         setOrgNodesJsonError('');
         setOrgNodesPreview([]);
+        setOrgDataTimes([]);
+        setOrgActiveDataDt('');
+        setOrgActiveDtIsManual(false);
         setSqlSearchQuery('');
         setSynSearchQuery('');
         setDocSearchQuery('');
@@ -570,6 +597,9 @@ export default function ProjectsManagement() {
         setIndexEntries([]);
         setOrgNodesJsonText(ORG_NODES_TEMPLATE);
         setOrgNodesPreview([]);
+        setOrgDataTimes([]);
+        setOrgActiveDataDt('');
+        setOrgActiveDtIsManual(false);
     };
 
     // ---- SQL Pairs ----
@@ -1126,6 +1156,8 @@ export default function ProjectsManagement() {
             const nextText = tree && tree.length > 0 ? JSON.stringify(stripForEditor(tree), null, 2) : ORG_NODES_TEMPLATE;
             setOrgNodesJsonText(nextText);
             parseOrgNodesJson(nextText);
+            // 同时加载数据快照
+            loadOrgDataTimes(projectId);
         } catch (error) {
             showToast({ message: `加载机构信息失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
             setOrgNodesJsonText(ORG_NODES_TEMPLATE);
@@ -1185,6 +1217,161 @@ export default function ProjectsManagement() {
         const parsed = parseOrgNodesJson();
         if (parsed !== null) {
             setOrgNodesJsonText(JSON.stringify(parsed, null, 2));
+        }
+    };
+
+    // ─── 机构信息 — 从数据源表导入 ──────────────────────────────────────────
+
+    const openOrgTableImportModal = async () => {
+        if (!contentManagementProject) {
+            showToast({ message: '请先选择项目', status: 'warning' });
+            return;
+        }
+        setOrgTableImportModalVisible(true);
+        setOrgTableImportStep('datasource');
+        setOrgTableImportSelectedDs('');
+        setOrgTableImportTables([]);
+        setOrgTableImportSelectedTable('');
+        setOrgTableImportColumns(null);
+        setOrgTableImportResult(null);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/datasources?projectId=${contentManagementProject._id}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            setOrgTableImportDatasources(data || []);
+        } catch (e) {
+            showToast({ message: `加载数据源列表失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const onOrgTableImportDsChange = async (dsId: string) => {
+        setOrgTableImportSelectedDs(dsId);
+        setOrgTableImportSelectedTable('');
+        setOrgTableImportColumns(null);
+        if (!dsId) return;
+        setOrgTableImportLoading(true);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/tables`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            setOrgTableImportTables(data || []);
+        } catch (e) {
+            showToast({ message: `加载表列表失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setOrgTableImportLoading(false);
+        }
+    };
+
+    const onOrgTableImportTableChange = async (tableName: string) => {
+        setOrgTableImportSelectedTable(tableName);
+        setOrgTableImportColumns(null);
+        if (!tableName || !orgTableImportSelectedDs) return;
+        setOrgTableImportLoading(true);
+        try {
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/datasources/${orgTableImportSelectedDs}/tables/${encodeURIComponent(tableName)}/columns`
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            const columns: { name: string; type: string }[] = data.columns || [];
+            const colNames = columns.map((c) => c.name.toLowerCase());
+            const required = ['data_dt', 'brchno', 'brchna', 'brchup', 'brchlv'];
+            const missing = required.filter((r) => !colNames.includes(r));
+            const valid = missing.length === 0;
+            setOrgTableImportColumns({
+                tableName: data.tableName || tableName,
+                columns,
+                valid,
+                message: valid
+                    ? `表 ${tableName} 包含 ${columns.length} 列，符合 c_par_brch_level 规范`
+                    : `表结构不符合 c_par_brch_level 规范，缺少必填列: ${missing.join(', ')}`,
+            });
+        } catch (e) {
+            showToast({ message: `校验表结构失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setOrgTableImportLoading(false);
+        }
+    };
+
+    const handleOrgImportFromTable = async () => {
+        if (!contentManagementProject || !orgTableImportSelectedDs || !orgTableImportSelectedTable) {
+            showToast({ message: '请选择数据源和表', status: 'warning' });
+            return;
+        }
+        if (!orgTableImportColumns?.valid) {
+            showToast({ message: '表结构校验未通过，无法导入', status: 'warning' });
+            return;
+        }
+        setOrgTableImportLoading(true);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/import-from-table`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectId: contentManagementProject._id,
+                    datasourceId: orgTableImportSelectedDs,
+                    tableName: orgTableImportSelectedTable,
+                }),
+            });
+            const body = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(body?.message || `HTTP ${response.status}`);
+            }
+            setOrgTableImportResult(body);
+            setOrgTableImportStep('result');
+            showToast({
+                message: `导入成功: ${body.imported} 个机构节点, dataDt=${body.dataDt}`,
+                status: 'success',
+            });
+            loadOrgNodes(contentManagementProject._id);
+        } catch (e) {
+            showToast({ message: `导入失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setOrgTableImportLoading(false);
+        }
+    };
+
+    // ─── 机构信息 — 数据快照管理 ──────────────────────────────────────────
+
+    const loadOrgDataTimes = async (projectId: string) => {
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/datatimes?projectId=${projectId}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            setOrgDataTimes(data || []);
+            // 同时获取当前激活的快照
+            const activeResp = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/active-data-dt?projectId=${projectId}`);
+            if (activeResp.ok) {
+                const activeData = await activeResp.json();
+                setOrgActiveDataDt(activeData.activeDataDt || '');
+                setOrgActiveDtIsManual(activeData.isManual || false);
+            }
+        } catch {
+            // 静默失败，datatimes 不是关键路径
+            setOrgDataTimes([]);
+            setOrgActiveDataDt('');
+            setOrgActiveDtIsManual(false);
+        }
+    };
+
+    const handleActivateOrgDataDt = async (dataDt: string | null) => {
+        if (!contentManagementProject) return;
+        try {
+            const params = new URLSearchParams({ projectId: contentManagementProject._id });
+            if (dataDt) params.append('dataDt', dataDt);
+            const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/activate-data-dt?${params}`, {
+                method: 'PUT',
+            });
+            const body = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(body?.message || `HTTP ${response.status}`);
+            }
+            showToast({ message: body.message || '快照切换成功', status: 'success' });
+            setOrgActiveDataDt(body.activeDataDt || '');
+            setOrgActiveDtIsManual(body.isManual || false);
+            loadOrgNodes(contentManagementProject._id);
+        } catch (e) {
+            showToast({ message: `切换快照失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
         }
     };
 
@@ -2237,6 +2424,14 @@ export default function ProjectsManagement() {
                                                 </button>
                                                 <button
                                                     type="button"
+                                                    onClick={openOrgTableImportModal}
+                                                    disabled={!contentManagementProject}
+                                                    className="rounded border border-border-light px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50 flex items-center gap-1"
+                                                >
+                                                    <Database className="h-3 w-3" /> 从数据源导入
+                                                </button>
+                                                <button
+                                                    type="button"
                                                     onClick={handleSaveOrgNodes}
                                                     disabled={!contentManagementProject || orgNodesSaving}
                                                     className="btn btn-primary text-xs px-2 py-1"
@@ -2273,7 +2468,26 @@ export default function ProjectsManagement() {
                                         </div>
                                     </div>
                                     <div className="lg:col-span-2 rounded-lg border border-border-light bg-surface-secondary/40 p-3">
-                                        <h4 className="mb-2 text-sm font-semibold text-text-primary">树形预览</h4>
+                                        <div className="mb-2 flex items-center gap-2">
+                                            <h4 className="text-sm font-semibold text-text-primary">树形预览</h4>
+                                            {orgActiveDataDt && (
+                                                <span
+                                                    className={cn(
+                                                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                                        orgActiveDtIsManual
+                                                            ? 'bg-orange-500/15 text-orange-400 ring-1 ring-inset ring-orange-500/20'
+                                                            : 'bg-blue-500/15 text-blue-400 ring-1 ring-inset ring-blue-500/20'
+                                                    )}
+                                                >
+                                                    {orgActiveDtIsManual ? '📌' : '🕐'} {orgActiveDataDt}
+                                                </span>
+                                            )}
+                                            {!orgActiveDataDt && (
+                                                <span className="inline-flex items-center rounded-full bg-gray-500/15 px-2 py-0.5 text-xs text-gray-400">
+                                                    JSON 模式
+                                                </span>
+                                            )}
+                                        </div>
                                         {orgNodesLoading ? (
                                             <div className="flex h-40 items-center justify-center text-sm text-text-secondary">加载中...</div>
                                         ) : orgNodesPreview.length === 0 ? (
@@ -2282,8 +2496,47 @@ export default function ProjectsManagement() {
                                                 <p className="text-sm">JSON 为空或格式错误</p>
                                             </div>
                                         ) : (
-                                            <div className="max-h-[480px] overflow-auto text-sm">
+                                            <div className="max-h-[400px] overflow-auto text-sm">
                                                 <OrgTreeView nodes={orgNodesPreview} depth={0} />
+                                            </div>
+                                        )}
+                                        {/* 快照切换器 */}
+                                        {orgDataTimes.length > 0 && (
+                                            <div className="mt-3 border-t border-border-light pt-3">
+                                                <div className="mb-1.5 flex items-center gap-1 text-xs text-text-tertiary">
+                                                    数据快照切换
+                                                    <span title="点击快照日期切换到该历史版本；切换后数据权限立即生效" className="cursor-help ml-0.5">
+                                                        ⓘ
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {orgDataTimes.map((dt) => (
+                                                        <button
+                                                            key={dt}
+                                                            type="button"
+                                                            onClick={() => handleActivateOrgDataDt(dt)}
+                                                            className={cn(
+                                                                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
+                                                                dt === orgActiveDataDt && orgActiveDtIsManual
+                                                                    ? 'bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/30'
+                                                                    : dt === orgActiveDataDt
+                                                                        ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
+                                                                        : 'bg-surface-secondary text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
+                                                            )}
+                                                        >
+                                                            {dt}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                {orgActiveDtIsManual && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleActivateOrgDataDt('')}
+                                                        className="mt-2 flex items-center gap-1 text-xs text-blue-500 hover:text-blue-400"
+                                                    >
+                                                        <RotateCw className="h-3 w-3" /> 恢复自动（最新）
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -2574,6 +2827,212 @@ export default function ProjectsManagement() {
                     </div>
                 </div>
             )}
+
+            {/* Org Table Import Modal (从数据源表导入机构信息) */}
+            {orgTableImportModalVisible && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-2xl rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <h3 className="text-lg font-semibold text-text-primary">从数据源表导入机构信息</h3>
+                            <button
+                                onClick={() => {
+                                    setOrgTableImportModalVisible(false);
+                                    setOrgTableImportResult(null);
+                                }}
+                                className="rounded p-1 text-text-secondary hover:bg-surface-hover"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Steps indicator */}
+                        <div className="flex items-center border-b border-border-light px-4 py-3">
+                            {[
+                                { key: 'datasource', label: '选择数据源', step: 0 },
+                                { key: 'table', label: '选择表并校验', step: 1 },
+                                { key: 'result', label: '导入完成', step: 2 },
+                            ].map((s) => {
+                                const currentStep =
+                                    orgTableImportStep === 'datasource' ? 0 : orgTableImportStep === 'table' ? 1 : 2;
+                                return (
+                                    <div key={s.key} className="flex items-center">
+                                        <div
+                                            className={cn(
+                                                'flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium',
+                                                s.step < currentStep
+                                                    ? 'bg-green-500 text-white'
+                                                    : s.step === currentStep
+                                                        ? 'bg-blue-500 text-white'
+                                                        : 'bg-gray-200 text-gray-500 dark:bg-gray-700'
+                                            )}
+                                        >
+                                            {s.step < currentStep ? '✓' : s.step + 1}
+                                        </div>
+                                        <span
+                                            className={cn(
+                                                'ml-2 text-xs',
+                                                s.step === currentStep ? 'font-medium text-text-primary' : 'text-text-tertiary'
+                                            )}
+                                        >
+                                            {s.label}
+                                        </span>
+                                        {s.step < 2 && <div className="mx-2 h-px w-8 bg-border-light" />}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Step 1: 选择数据源 */}
+                        {orgTableImportStep === 'datasource' && (
+                            <div className="p-4 space-y-3">
+                                <select
+                                    value={orgTableImportSelectedDs}
+                                    onChange={(e) => onOrgTableImportDsChange(e.target.value)}
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="">请选择数据源</option>
+                                    {orgTableImportDatasources.map((ds: any) => (
+                                        <option key={ds.id} value={ds.id}>
+                                            {ds.name} ({ds.provider})
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="text-right">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrgTableImportStep('table')}
+                                        disabled={!orgTableImportSelectedDs || orgTableImportTables.length === 0}
+                                        className="btn btn-primary text-sm px-3 py-1.5 disabled:opacity-50"
+                                    >
+                                        下一步
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 2: 选择表并校验 */}
+                        {orgTableImportStep === 'table' && (
+                            <div className="p-4 space-y-3">
+                                {orgTableImportLoading ? (
+                                    <div className="flex items-center justify-center py-8 text-sm text-text-secondary">
+                                        正在加载...
+                                    </div>
+                                ) : (
+                                    <select
+                                        value={orgTableImportSelectedTable}
+                                        onChange={(e) => onOrgTableImportTableChange(e.target.value)}
+                                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        <option value="">请选择表（如 c_par_brch_level）</option>
+                                        {orgTableImportTables.map((t) => (
+                                            <option key={t} value={t}>
+                                                {t}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+
+                                {/* Schema 校验结果 */}
+                                {orgTableImportColumns && (
+                                    <div>
+                                        <div
+                                            className={cn(
+                                                'rounded-md p-3 text-sm',
+                                                orgTableImportColumns.valid
+                                                    ? 'border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400'
+                                                    : 'border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
+                                            )}
+                                        >
+                                            <p className="font-medium">
+                                                {orgTableImportColumns.valid ? 'Schema 校验通过' : 'Schema 校验失败'}
+                                            </p>
+                                            <p className="mt-1 text-xs opacity-80">{orgTableImportColumns.message}</p>
+                                        </div>
+                                        <p className="mt-1 text-xs text-text-tertiary">
+                                            必填列: data_dt / brchno / brchna / brchup / brchlv
+                                        </p>
+                                        {orgTableImportColumns.columns.length > 0 && (
+                                            <div className="mt-2 flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                                                {orgTableImportColumns.columns.map((c) => (
+                                                    <span
+                                                        key={c.name}
+                                                        className="inline-flex items-center rounded bg-surface-secondary px-2 py-0.5 text-xs text-text-secondary"
+                                                    >
+                                                        {c.name} <span className="ml-1 text-text-tertiary">({c.type})</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrgTableImportStep('datasource')}
+                                        className="btn btn-neutral text-sm px-3 py-1.5"
+                                    >
+                                        上一步
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleOrgImportFromTable}
+                                        disabled={!orgTableImportColumns?.valid || orgTableImportLoading}
+                                        className="btn btn-primary text-sm px-3 py-1.5 disabled:opacity-50"
+                                    >
+                                        {orgTableImportLoading ? '导入中...' : '开始导入'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 3: 导入结果 */}
+                        {orgTableImportStep === 'result' && orgTableImportResult && (
+                            <div className="p-4 space-y-4">
+                                <div className="flex flex-col items-center py-3">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
+                                        <svg
+                                            className="h-6 w-6 text-green-500"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
+                                    </div>
+                                    <p className="mt-2 text-sm font-medium text-text-primary">导入成功</p>
+                                    <p className="text-xs text-text-tertiary">从数据源表成功导入机构信息</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 rounded-md border border-border-light bg-surface-secondary/40 p-3 text-sm">
+                                    <div>
+                                        <span className="text-text-tertiary">导入节点数：</span>
+                                        <span className="font-semibold text-green-500">{orgTableImportResult.imported}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-text-tertiary">数据日期 (dataDt)：</span>
+                                        <span className="font-mono text-text-primary">{orgTableImportResult.dataDt}</span>
+                                    </div>
+                                </div>
+                                <div className="text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrgTableImportModalVisible(false)}
+                                        className="btn btn-primary text-sm px-4 py-1.5"
+                                    >
+                                        关闭
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }

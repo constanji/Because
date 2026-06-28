@@ -220,6 +220,30 @@ async function resolveMcpExecutionContext({ resolveSources, configurable }) {
         logger.warn("[McpContext] Agent binding lookup failed:", error);
       }
     }
+
+    // 默认数据源回退：取第一个启用的数据源
+    if (source.from === "agentBinding") {
+      // agentBinding 作为最后一个 resolve source 且没命中时，回退到默认数据源
+      continue;
+    }
+  }
+
+  // 所有来源均未命中 → fallback 到默认数据源（第一个启用的）
+  try {
+    const DatDatasource = await getDatDatasourceModel();
+    const defaultDs = await DatDatasource.findOne({ enabled: true }).sort({ createdAt: 1 }).lean();
+    if (defaultDs?._id && defaultDs?.projectId) {
+      logger.info(
+        `[McpContext] Fallback to default datasource: ${defaultDs._id}, projectId=${defaultDs.projectId}`,
+      );
+      return {
+        projectId: String(defaultDs.projectId),
+        datasourceId: String(defaultDs._id),
+        source: "default",
+      };
+    }
+  } catch (error) {
+    logger.warn("[McpContext] Default datasource fallback failed:", error);
   }
 
   return null;

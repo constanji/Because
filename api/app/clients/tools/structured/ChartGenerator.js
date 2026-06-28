@@ -11,42 +11,40 @@ class ChartGenerator extends Tool {
   name = "chart_generator";
 
   description =
-    "G2 图表生成工具。传入 title + g2Spec 生成交互式图表嵌入聊天。\n\n" +
-    "支持类型：分组柱形图、堆叠柱形图、发散条形图、弹性条形图、折线图、柱线混合双轴图、斜率图、饼图/环图、箱线图、热力图、雷达图、散点图、瀑布图等。\n\n" +
-    "## 图表生成规则（强制执行，违反任何一条视为违规）\n\n" +
-    "### 1. 何时必须画图（按顺序判断，命中即执行）\n" +
-    "- 数据有 ≥2 行且存在维度字段（brchna/地区/渠道等）有 ≥2 个不同值 → 必须画图\n" +
-    "- 数据只有 1 行但包含时间对比字段（yd_value/m_begin_value/q_begin_value/y_begin_value/ly_value 任意一个非空）→ 必须画图\n" +
-    "- 数据只有 1 行且无任何时间对比字段 → 禁止画图，告知用户数据粒度不足\n\n" +
-    "### 2. 宽格式时间序列转换（1行数据含时间对比字段时必须执行，不可跳过）\n" +
-    "将时间对比字段转换为长格式，每条记录含 日期、指标值、对比类型：\n" +
-    "- index_value → 日期=data_dt，类型=当前\n" +
-    "- yd_value → 日期=data_dt减1天，类型=上日\n" +
-    "- m_begin_value → 日期=上月末，类型=上月末\n" +
-    "- q_begin_value → 日期=上季末，类型=上季末\n" +
-    "- y_begin_value → 日期=上年末(12月31日)，类型=上年末\n" +
-    "- ly_value → 日期=去年同期，类型=上年同期\n" +
-    "转换后按日期升序排列。null/不存在的字段跳过。有效记录≥3条→生成趋势图。\n\n" +
-    "### 3. 图表类型选型\n" +
-    "- ≥2个维度值对比 → 分组柱形图/横向条形图\n" +
-    "- ≥3个时间点序列 → 折线图/面积图\n" +
-    "- ≥3行Top N排名 → 横向条形图\n" +
-    "- 各部分占整体比例 → 饼图/环图\n" +
-    "- 绝对值+增长率 → 柱线混合双轴图\n\n" +
-    "### 4. 数据真实性（最高优先级，严禁违反）\n" +
-    "- 图表数值必须原封不动来自 ask_data 返回结果\n" +
-    "- 严禁：把合计值除以N估算、凭空编造数据行、拆分汇总行凑图\n" +
-    "- 1行合计且无时间对比字段 → 不画图，告知用户\n" +
-    "- 🚫 严禁使用任何 emoji 表情符号（包括 📊📈📉🔍💡✅❌ 等）\n\n" +
-    "### 5. 字段命名\n" +
-    "- 图表数据字段名必须使用中文，禁止展示数据库原始英文字段名（如 district_count）\n" +
-    "- 标题需具备业务洞察力（如\"二线城市是本月销售下滑的重灾区\"而非\"各地区销售数据\"）\n\n" +
-    "### 6. G2 Spec 格式要点\n" +
-    "- 必须包含 type（interval/line/point/area/cell/boxplot 或 view）和 data\n" +
-    "- 复合图表用 type:\"view\" + children 数组\n" +
-    "- encode 配置 x/y/color/series/shape 等通道\n" +
-    "- transform 支持 stackY/dodgeX/flexX/normalizeY 等\n" +
-    "- 参考 G2 Spec 标准格式：https://g2.antv.antgroup.com/api/spec";
+    "G2 图表生成工具。传入 title + g2Spec 生成图表。\n\n" +
+    "## g2Spec 格式（唯一合法格式，只能替换 <> 占位符）\n\n" +
+    "### 条件 A（多行多维度对比 → 柱状图）\n" +
+    "```json\n" +
+    '{"type":"view","data":[\n' +
+    '  {"<维度中文名>":"<rows[0].维度值>","<指标中文名>":<rows[0].index_value>},\n' +
+    '  {"<维度中文名>":"<rows[1].维度值>","<指标中文名>":<rows[1].index_value>}\n' +
+    '],"children":[{"type":"interval","encode":{"x":"<维度中文名>","y":"<指标中文名>","color":"<维度中文名>"}}],\n' +
+    '"scale":{"y":{"nice":true}},\n' +
+    '"axis":{"x":{"title":"<维度含义>"},"y":{"title":"<指标中文名>（万元）"}}}\n' +
+    "```\n" +
+    "- data 逐行取自 rows，有几行取几行，数值 = 原始万元值\n\n" +
+    "### 条件 B（单行时间对比 → 柱状图）\n" +
+    "将 index_value/yd_value/m_begin_value 等 reshape 为 {对比类型, 数值}：\n" +
+    "```json\n" +
+    '{"type":"view","data":[\n' +
+    '  {"对比类型":"上日","数值":<rows[0].yd_value>},\n' +
+    '  {"对比类型":"上月末","数值":<rows[0].m_begin_value>},\n' +
+    '  {"对比类型":"上季末","数值":<rows[0].q_begin_value>},\n' +
+    '  {"对比类型":"上年末","数值":<rows[0].y_begin_value>},\n' +
+    '  {"对比类型":"上年同期","数值":<rows[0].ly_value>},\n' +
+    '  {"对比类型":"当前","数值":<rows[0].index_value>}\n' +
+    '],"children":[{"type":"interval","encode":{"x":"对比类型","y":"数值","color":"对比类型"}}],\n' +
+    '"scale":{"y":{"nice":true}},\n' +
+    '"axis":{"x":{"title":"时间对比"},"y":{"title":"<rows[0].index_name>（万元）"}}}\n' +
+    "```\n" +
+    "- data 只含非 null 字段条目（≥2 条即可），数值 = 原始万元值\n\n" +
+    "### 🔴 规则\n" +
+    "- 只能替换 <> 占位符，禁止新增/删除/修改任何字段名/结构\n" +
+    "- encode 的 value 用字符串简写（如 \"x\":\"对比类型\"），禁止用对象包裹（禁止 {\"field\":\"...\",\"type\":\"nominal\"}）\n" +
+    "- 禁止改 y 轴标题中的\"（万元）\"后缀\n" +
+    "- 数值 = ask_data 返回原始值，不做除法或取整\n" +
+    "- 🚫 严禁 emoji\n" +
+    "- 标题具业务洞察力";
 
   schema = z.object({
     title: z

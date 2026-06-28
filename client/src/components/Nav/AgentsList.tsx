@@ -112,6 +112,11 @@ export default function AgentsList({ toggleNav }: AgentsListProps) {
         (ds: DatDatasource) => ds.enabled
       );
       setDatasources(enabledDatasources);
+
+      // 只有一个数据源时自动选中，减少手动选择步骤
+      if (!selectedDataSourceId && enabledDatasources.length === 1) {
+        setSelectedDataSourceId(enabledDatasources[0]._id);
+      }
     } catch (error) {
       console.error("Error fetching datasources:", error);
       setDatasources([]);
@@ -139,10 +144,52 @@ export default function AgentsList({ toggleNav }: AgentsListProps) {
 
   const agents = useMemo(() => agentsResponse?.data ?? [], [agentsResponse]);
 
+  // 所有挂靠了数据源的 agent name 集合（用于判断是否是问数智能体）
+  const dataAgentNames = useMemo(() => {
+    const names = new Set<string>();
+    datasources.forEach((ds) => ds.agentNames?.forEach((n) => names.add(n)));
+    return names;
+  }, [datasources]);
+
+  // 当前 URL 中激活的 agent id
+  const activeAgentId = useMemo(() => {
+    const urlParams = new URLSearchParams(location.search);
+    return urlParams.get("agent_id") || (location.state as any)?.agentId || null;
+  }, [location.search, location.state]);
+
+  // 当前激活的 agent 是否是问数智能体（只有问数智能体才需要选数据源）
+  const activeAgent = useMemo(
+    () => agents.find((a) => a.id === activeAgentId),
+    [agents, activeAgentId],
+  );
+  const isDataAgent = activeAgent ? dataAgentNames.has(activeAgent.name) : false;
+
+  // 根据 agent 名称查找绑定的数据源
+  const findBoundDatasource = useCallback(
+    (agentName: string) => {
+      return datasources.find(
+        (ds) => ds.agentNames?.includes(agentName),
+      );
+    },
+    [datasources],
+  );
+
   const handleAgentClick = useCallback(
     (agent: Agent) => {
-      // 检查是否选中了数据源
-      if (!selectedDataSourceId) {
+      // 智能选择数据源：先查 agent 绑定，再回退已选
+      let dsId = selectedDataSourceId;
+
+      if (!dsId) {
+        // agent 绑定了数据源 → 自动使用，无需手动选
+        const boundDs = findBoundDatasource(agent.name);
+        if (boundDs) {
+          dsId = boundDs._id;
+          setSelectedDataSourceId(dsId);
+        }
+      }
+
+      // 既未绑定也无已选数据源 → 才提示手动选择
+      if (!dsId) {
         showToast({
           message: "请先在下方业务列表中选择一个数据源",
           status: "warning",
@@ -171,7 +218,7 @@ export default function AgentsList({ toggleNav }: AgentsListProps) {
         state: {
           agentId: agent.id,
           agentName: agent.name,
-          datasourceId: selectedDataSourceId,
+          datasourceId: dsId,
         },
       });
 
@@ -238,8 +285,15 @@ export default function AgentsList({ toggleNav }: AgentsListProps) {
         </div>
       </div>
 
-      {/* 数据源选择器 - 业务列表 */}
-      <div className="mb-4 border-t border-border-light pt-4">
+      {/* 数据源选择器 - 业务列表：仅问数智能体（挂靠了数据源的 agent）才显示 */}
+      <div
+        className={cn(
+          "mb-4 border-t border-border-light pt-4 transition-all duration-300 ease-in-out",
+          !activeAgent || isDataAgent
+            ? "max-h-96 opacity-100"
+            : "max-h-0 opacity-0 overflow-hidden border-t-0 pt-0 mb-0"
+        )}
+      >
         <div className="mb-2 px-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-text-primary">业务列表</h2>
           {!selectedDataSourceId && datasources.length > 0 && (
@@ -256,13 +310,14 @@ export default function AgentsList({ toggleNav }: AgentsListProps) {
               暂无已配置的数据源
             </div>
           ) : (
-            <div className="space-y-1">
-              {datasources.map((datasource) => {
+            <div className="space-y-1 max-h-80 overflow-y-auto">
+              {datasources.map((datasource, idx) => {
                 const isSelected = selectedDataSourceId === datasource._id;
                 return (
                   <div
                     key={datasource._id}
-                    className="flex items-center gap-1 group"
+                    className="flex items-center gap-1 group animate-fadeIn"
+                    style={{ animationDelay: `${idx * 50}ms` }}
                   >
                     <button
                       onClick={() => handleDatasourceSelect(datasource)}
