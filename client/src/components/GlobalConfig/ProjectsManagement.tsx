@@ -9,6 +9,7 @@ import {
     Trash2,
     FolderOpen,
     ChevronDown,
+    ChevronRight,
     ChevronUp,
     Server,
     Bot,
@@ -22,7 +23,6 @@ import {
     Inbox,
     Tag,
     Network,
-    Code2,
     RotateCw,
 } from 'lucide-react';
 import { providerConfigs, ProviderType } from '~/constants/projectConfig';
@@ -32,23 +32,65 @@ import McpServersConfig from './components/McpServersConfig';
 
 const DAT_API_BASE = import.meta.env.VITE_DAT_OPENAPI_BASE_URL || 'http://localhost:8080';
 
-interface OrgPreviewNode {
+interface OrgTreeNode {
     key: string;
     title: string;
-    children: OrgPreviewNode[];
+    dataScope: string;
+    children: OrgTreeNode[];
 }
 
-// 简易树视图：避免引入额外 UI 库，单纯渲染嵌套缩进 + 折叠
-function OrgTreeView({ nodes, depth }: { nodes: OrgPreviewNode[]; depth: number }) {
+const SCOPE_LABELS: Record<string, { label: string; color: string }> = {
+    ALL: { label: '全部', color: 'bg-green-500/15 text-green-400 ring-green-500/20' },
+    SELF_AND_DESCENDANTS: { label: '本级及下级', color: 'bg-blue-500/15 text-blue-400 ring-blue-500/20' },
+    SELF: { label: '仅本级', color: 'bg-orange-500/15 text-orange-400 ring-orange-500/20' },
+};
+
+// 单个树节点：自带展开/折叠
+function OrgTreeNodeView({ node, depth }: { node: OrgTreeNode; depth: number }) {
+    const [expanded, setExpanded] = useState(depth < 2); // 默认展开前两层
+    const hasChildren = node.children && node.children.length > 0;
+    const scope = SCOPE_LABELS[node.dataScope] || { label: node.dataScope || 'SELF', color: 'bg-gray-500/15 text-gray-400 ring-gray-500/20' };
+
     return (
-        <ul className={cn(depth === 0 ? 'space-y-1' : 'space-y-1 border-l border-border-light pl-3 ml-1')}>
+        <li>
+            <div
+                className={cn(
+                    'flex items-center gap-1 py-0.5 cursor-pointer select-none rounded hover:bg-surface-hover/50',
+                    depth === 0 && 'font-medium'
+                )}
+                onClick={() => hasChildren && setExpanded(!expanded)}
+            >
+                {hasChildren ? (
+                    expanded ? (
+                        <ChevronDown className="h-3 w-3 text-text-tertiary shrink-0" />
+                    ) : (
+                        <ChevronRight className="h-3 w-3 text-text-tertiary shrink-0" />
+                    )
+                ) : (
+                    <span className="w-3 shrink-0" />
+                )}
+                <span className="text-text-primary text-xs">{node.title}</span>
+                <span className={cn('inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-medium ring-1 ring-inset', scope.color)}>
+                    {scope.label}
+                </span>
+            </div>
+            {hasChildren && expanded && (
+                <ul className="border-l border-border-light pl-3 ml-1.5 space-y-0.5">
+                    {node.children.map((child) => (
+                        <OrgTreeNodeView key={child.key} node={child} depth={depth + 1} />
+                    ))}
+                </ul>
+            )}
+        </li>
+    );
+}
+
+// 树视图容器
+function OrgTreeView({ nodes }: { nodes: OrgTreeNode[] }) {
+    return (
+        <ul className="space-y-0.5">
             {nodes.map((n) => (
-                <li key={n.key}>
-                    <div className="text-text-primary">{n.title}</div>
-                    {n.children && n.children.length > 0 && (
-                        <OrgTreeView nodes={n.children} depth={depth + 1} />
-                    )}
-                </li>
+                <OrgTreeNodeView key={n.key} node={n} depth={0} />
             ))}
         </ul>
     );
@@ -260,30 +302,8 @@ export default function ProjectsManagement() {
     const [indexUploading, setIndexUploading] = useState(false);
     const [indexUploadResult, setIndexUploadResult] = useState<IndexUploadResult | null>(null);
 
-    // Org Nodes (机构信息 JSON)
-    const ORG_NODES_TEMPLATE = `[
-  {
-    "orgCode": "H0001",
-    "orgName": "总行",
-    "orgType": "HEAD_OFFICE",
-    "dataScope": "ALL",
-    "children": [
-      {
-        "orgCode": "B0001",
-        "orgName": "北京分行",
-        "orgType": "BRANCH",
-        "dataScope": "SELF_AND_DESCENDANTS",
-        "children": [
-          { "orgCode": "S00001", "orgName": "北京城南支行", "orgType": "SUB_BRANCH", "dataScope": "SELF" }
-        ]
-      }
-    ]
-  }
-]`;
-    const [orgNodesJsonText, setOrgNodesJsonText] = useState<string>(ORG_NODES_TEMPLATE);
-    const [orgNodesJsonError, setOrgNodesJsonError] = useState<string>('');
-    const [orgNodesPreview, setOrgNodesPreview] = useState<OrgPreviewNode[]>([]);
-    const [orgNodesSaving, setOrgNodesSaving] = useState(false);
+    // Org Nodes (机构信息 — 数据源表驱动)
+    const [orgNodesTree, setOrgNodesTree] = useState<OrgTreeNode[]>([]);
     const [orgNodesLoading, setOrgNodesLoading] = useState(false);
 
     // Org Nodes — 从数据源表导入
@@ -576,9 +596,7 @@ export default function ProjectsManagement() {
         setIndexEntries([]);
         setIndexSearchQuery('');
         setIndexUploadResult(null);
-        setOrgNodesJsonText(ORG_NODES_TEMPLATE);
-        setOrgNodesJsonError('');
-        setOrgNodesPreview([]);
+        setOrgNodesTree([]);
         setOrgDataTimes([]);
         setOrgActiveDataDt('');
         setOrgActiveDtIsManual(false);
@@ -595,8 +613,7 @@ export default function ProjectsManagement() {
         setSynonyms([]);
         setDocs([]);
         setIndexEntries([]);
-        setOrgNodesJsonText(ORG_NODES_TEMPLATE);
-        setOrgNodesPreview([]);
+        setOrgNodesTree([]);
         setOrgDataTimes([]);
         setOrgActiveDataDt('');
         setOrgActiveDtIsManual(false);
@@ -1109,43 +1126,14 @@ export default function ProjectsManagement() {
         }
     };
 
-    // ============ Org Nodes (机构信息 JSON 模型) ============
+    // ============ Org Nodes (机构信息 — 数据源表驱动) ============
 
-    const stripForEditor = (nodes: any[]): any[] =>
-        (nodes || []).map((n) => {
-            const obj: any = {
-                orgCode: n.orgCode,
-                orgName: n.orgName,
-                orgType: n.orgType,
-                dataScope: n.dataScope,
-            };
-            if (n.children && n.children.length > 0) {
-                obj.children = stripForEditor(n.children);
-            }
-            return obj;
-        });
-
-    const jsonToPreviewTree = (nodes: any[]): OrgPreviewNode[] =>
-        (nodes || []).map((n) => ({
-            key: `org-${n.orgCode}`,
-            title: `${n.orgCode} ${n.orgName || ''} [${n.orgType}/${n.dataScope}]`,
-            children: jsonToPreviewTree(n.children || []),
-        }));
-
-    const parseOrgNodesJson = (text?: string): any[] | null => {
-        const source = text ?? orgNodesJsonText;
-        try {
-            const parsed = JSON.parse(source || '[]');
-            if (!Array.isArray(parsed)) throw new Error('根必须是数组');
-            setOrgNodesPreview(jsonToPreviewTree(parsed));
-            setOrgNodesJsonError('');
-            return parsed;
-        } catch (err) {
-            setOrgNodesJsonError('JSON 格式错误: ' + (err instanceof Error ? err.message : String(err)));
-            setOrgNodesPreview([]);
-            return null;
-        }
-    };
+    const toTreeNode = (node: any): OrgTreeNode => ({
+        key: node.orgCode,
+        title: `${node.orgCode}  ${node.orgName || ''}`,
+        dataScope: node.dataScope || 'SELF',
+        children: (node.children || []).map(toTreeNode),
+    });
 
     const loadOrgNodes = async (projectId: string) => {
         setOrgNodesLoading(true);
@@ -1153,46 +1141,13 @@ export default function ProjectsManagement() {
             const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes?projectId=${projectId}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const tree = await response.json();
-            const nextText = tree && tree.length > 0 ? JSON.stringify(stripForEditor(tree), null, 2) : ORG_NODES_TEMPLATE;
-            setOrgNodesJsonText(nextText);
-            parseOrgNodesJson(nextText);
+            setOrgNodesTree((tree || []).map(toTreeNode));
             // 同时加载数据快照
             loadOrgDataTimes(projectId);
-        } catch (error) {
-            showToast({ message: `加载机构信息失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
-            setOrgNodesJsonText(ORG_NODES_TEMPLATE);
-            parseOrgNodesJson(ORG_NODES_TEMPLATE);
+        } catch {
+            setOrgNodesTree([]);
         } finally {
             setOrgNodesLoading(false);
-        }
-    };
-
-    const handleSaveOrgNodes = async () => {
-        if (!contentManagementProject) return;
-        const parsed = parseOrgNodesJson();
-        if (parsed === null) {
-            showToast({ message: 'JSON 有错误，请先修正', status: 'error' });
-            return;
-        }
-        setOrgNodesSaving(true);
-        try {
-            const response = await fetch(
-                `${DAT_API_BASE}/api/v1/org/nodes?projectId=${contentManagementProject._id}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(parsed),
-                }
-            );
-            const body = await response.json().catch(() => null);
-            if (!response.ok) {
-                throw new Error(body?.message || `HTTP ${response.status}`);
-            }
-            showToast({ message: `保存成功，${body?.inserted || 0} 个机构已生效`, status: 'success' });
-        } catch (error) {
-            showToast({ message: `保存失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
-        } finally {
-            setOrgNodesSaving(false);
         }
     };
 
@@ -1206,17 +1161,10 @@ export default function ProjectsManagement() {
             );
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             showToast({ message: '清空成功', status: 'success' });
-            setOrgNodesJsonText(ORG_NODES_TEMPLATE);
-            parseOrgNodesJson(ORG_NODES_TEMPLATE);
+            await loadOrgNodes(contentManagementProject._id);
+            await loadOrgDataTimes(contentManagementProject._id);
         } catch (error) {
             showToast({ message: `清空失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
-        }
-    };
-
-    const handleFormatOrgJson = () => {
-        const parsed = parseOrgNodesJson();
-        if (parsed !== null) {
-            setOrgNodesJsonText(JSON.stringify(parsed, null, 2));
         }
     };
 
@@ -2009,6 +1957,9 @@ export default function ProjectsManagement() {
                             >
                                 <Network className="h-4 w-4" />
                                 机构信息
+                                {!orgActiveDataDt && orgDataTimes.length === 0 && (
+                                    <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-orange-500" title="尚未导入机构数据" />
+                                )}
                             </button>
                         </div>
 
@@ -2399,147 +2350,113 @@ export default function ProjectsManagement() {
                                 </div>
                             )}
 
-                            {/* Org Nodes Tab (机构信息) */}
+                            {/* Org Nodes Tab (机构信息 — 数据源表驱动) */}
                             {contentActiveTab === 'org-nodes' && (
-                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-                                    <div className="lg:col-span-3 rounded-lg border border-border-light bg-surface-secondary/40 p-3">
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <h4 className="text-sm font-semibold text-text-primary">机构信息</h4>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleFormatOrgJson}
-                                                    disabled={!contentManagementProject}
-                                                    className="rounded border border-border-light px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50 flex items-center gap-1"
-                                                >
-                                                    <Code2 className="h-3 w-3" /> 格式化
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => contentManagementProject && loadOrgNodes(contentManagementProject._id)}
-                                                    disabled={!contentManagementProject || orgNodesLoading}
-                                                    className="rounded border border-border-light px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50 flex items-center gap-1"
-                                                >
-                                                    <RotateCw className={cn('h-3 w-3', orgNodesLoading && 'animate-spin')} /> 重新拉取
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={openOrgTableImportModal}
-                                                    disabled={!contentManagementProject}
-                                                    className="rounded border border-border-light px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50 flex items-center gap-1"
-                                                >
-                                                    <Database className="h-3 w-3" /> 从数据源导入
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleSaveOrgNodes}
-                                                    disabled={!contentManagementProject || orgNodesSaving}
-                                                    className="btn btn-primary text-xs px-2 py-1"
-                                                >
-                                                    {orgNodesSaving ? '保存中...' : '保存并应用'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <textarea
-                                            value={orgNodesJsonText}
-                                            onChange={(e) => setOrgNodesJsonText(e.target.value)}
-                                            onBlur={() => parseOrgNodesJson()}
-                                            rows={22}
-                                            placeholder="嵌套 JSON 数组，每节点至少含 orgCode/orgName/orgType/dataScope"
-                                            spellCheck={false}
-                                            className={cn(
-                                                'w-full rounded-md border bg-white px-3 py-2 font-mono text-xs leading-relaxed text-gray-900 dark:bg-gray-900 dark:text-gray-100',
-                                                orgNodesJsonError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                                            )}
-                                        />
-                                        {orgNodesJsonError ? (
-                                            <div className="mt-1 text-xs text-red-500">{orgNodesJsonError}</div>
-                                        ) : (
-                                            <div className="mt-1 text-xs text-text-tertiary">✓ JSON 格式有效；失焦时自动同步到右侧树预览</div>
-                                        )}
-                                        <div className="mt-3">
-                                            <Button
+                                <div className="rounded-lg border border-border-light bg-surface-secondary/40 p-4">
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <h4 className="text-sm font-semibold text-text-primary">机构信息</h4>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={openOrgTableImportModal}
+                                                disabled={!contentManagementProject}
+                                                className="btn btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
+                                            >
+                                                <Database className="h-3.5 w-3.5" /> 从数据源导入
+                                            </button>
+                                            <button
+                                                type="button"
                                                 onClick={handleClearOrgNodes}
                                                 disabled={!contentManagementProject}
-                                                className="btn btn-neutral text-xs text-red-500 disabled:opacity-50 flex items-center gap-1"
+                                                className="btn btn-neutral text-xs text-red-500 disabled:opacity-50 flex items-center gap-1 px-2 py-1.5"
                                             >
-                                                <Trash2 className="h-3 w-3" /> 清空机构信息
-                                            </Button>
+                                                <Trash2 className="h-3.5 w-3.5" /> 清空机构信息
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="lg:col-span-2 rounded-lg border border-border-light bg-surface-secondary/40 p-3">
-                                        <div className="mb-2 flex items-center gap-2">
-                                            <h4 className="text-sm font-semibold text-text-primary">树形预览</h4>
-                                            {orgActiveDataDt && (
+
+                                    {/* 快照切换器 */}
+                                    {orgDataTimes.length > 0 && (
+                                        <div className="mb-3">
+                                            <div className="flex items-center gap-2 text-sm text-text-secondary mb-2">
+                                                <span>当前快照：</span>
                                                 <span
                                                     className={cn(
-                                                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
                                                         orgActiveDtIsManual
                                                             ? 'bg-orange-500/15 text-orange-400 ring-1 ring-inset ring-orange-500/20'
                                                             : 'bg-blue-500/15 text-blue-400 ring-1 ring-inset ring-blue-500/20'
                                                     )}
                                                 >
-                                                    {orgActiveDtIsManual ? '📌' : '🕐'} {orgActiveDataDt}
+                                                    {orgActiveDtIsManual ? '📌' : '🕐'} {orgActiveDataDt || '最新'}
                                                 </span>
-                                            )}
-                                            {!orgActiveDataDt && (
-                                                <span className="inline-flex items-center rounded-full bg-gray-500/15 px-2 py-0.5 text-xs text-gray-400">
-                                                    JSON 模式
+                                                <span
+                                                    title="通过 c_par_brch_level 表的 data_dt 列管理快照"
+                                                    className="cursor-help text-xs"
+                                                >
+                                                    ⓘ
                                                 </span>
+                                            </div>
+                                            <div className="mb-1.5 flex items-center gap-1 text-xs text-text-tertiary">
+                                                数据快照切换
+                                                <span
+                                                    title="点击快照日期切换到该历史版本；切换后数据权限立即生效"
+                                                    className="cursor-help ml-0.5"
+                                                >
+                                                    ⓘ
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {orgDataTimes.map((dt) => (
+                                                    <button
+                                                        key={dt}
+                                                        type="button"
+                                                        onClick={() => handleActivateOrgDataDt(dt)}
+                                                        className={cn(
+                                                            'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
+                                                            dt === orgActiveDataDt && orgActiveDtIsManual
+                                                                ? 'bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/30'
+                                                                : dt === orgActiveDataDt
+                                                                    ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
+                                                                    : 'bg-surface-secondary text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
+                                                        )}
+                                                    >
+                                                        {dt}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {orgActiveDtIsManual && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleActivateOrgDataDt('')}
+                                                    className="mt-2 flex items-center gap-1 text-xs text-blue-500 hover:text-blue-400"
+                                                >
+                                                    <RotateCw className="h-3 w-3" /> 恢复自动（最新）
+                                                </button>
                                             )}
                                         </div>
-                                        {orgNodesLoading ? (
-                                            <div className="flex h-40 items-center justify-center text-sm text-text-secondary">加载中...</div>
-                                        ) : orgNodesPreview.length === 0 ? (
-                                            <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
-                                                <Network className="h-8 w-8" />
-                                                <p className="text-sm">JSON 为空或格式错误</p>
-                                            </div>
-                                        ) : (
-                                            <div className="max-h-[400px] overflow-auto text-sm">
-                                                <OrgTreeView nodes={orgNodesPreview} depth={0} />
-                                            </div>
-                                        )}
-                                        {/* 快照切换器 */}
-                                        {orgDataTimes.length > 0 && (
-                                            <div className="mt-3 border-t border-border-light pt-3">
-                                                <div className="mb-1.5 flex items-center gap-1 text-xs text-text-tertiary">
-                                                    数据快照切换
-                                                    <span title="点击快照日期切换到该历史版本；切换后数据权限立即生效" className="cursor-help ml-0.5">
-                                                        ⓘ
-                                                    </span>
-                                                </div>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {orgDataTimes.map((dt) => (
-                                                        <button
-                                                            key={dt}
-                                                            type="button"
-                                                            onClick={() => handleActivateOrgDataDt(dt)}
-                                                            className={cn(
-                                                                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
-                                                                dt === orgActiveDataDt && orgActiveDtIsManual
-                                                                    ? 'bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/30'
-                                                                    : dt === orgActiveDataDt
-                                                                        ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
-                                                                        : 'bg-surface-secondary text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
-                                                            )}
-                                                        >
-                                                            {dt}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                                {orgActiveDtIsManual && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleActivateOrgDataDt('')}
-                                                        className="mt-2 flex items-center gap-1 text-xs text-blue-500 hover:text-blue-400"
-                                                    >
-                                                        <RotateCw className="h-3 w-3" /> 恢复自动（最新）
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
+                                    )}
+
+                                    {/* 分隔线 */}
+                                    {orgDataTimes.length > 0 && orgNodesTree.length > 0 && (
+                                        <div className="my-3 border-t border-border-light" />
+                                    )}
+
+                                    {/* 机构树预览 */}
+                                    {orgNodesLoading ? (
+                                        <div className="flex h-40 items-center justify-center text-sm text-text-secondary">
+                                            加载中...
+                                        </div>
+                                    ) : orgNodesTree.length > 0 ? (
+                                        <div className="max-h-[400px] overflow-auto text-sm">
+                                            <OrgTreeView nodes={orgNodesTree} />
+                                        </div>
+                                    ) : (
+                                        <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
+                                            <Network className="h-8 w-8" />
+                                            <p className="text-sm">尚未从数据源导入机构信息</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
