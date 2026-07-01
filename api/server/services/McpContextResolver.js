@@ -9,8 +9,8 @@ const DEFAULT_CONTEXT_INJECTION = {
   "becauseai-server": {
     ask_data: {
       resolve: [
-        { from: "conversation" },
         { from: "requestBody", field: "datasourceId" },
+        { from: "conversation" },
         { from: "agentBinding" },
       ],
       // 与 Because.yaml 中的协议保持一致：arg4=机构编码，arg5=用户问题
@@ -25,8 +25,8 @@ const DEFAULT_CONTEXT_INJECTION = {
     },
     agents: {
       resolve: [
-        { from: "conversation" },
         { from: "requestBody", field: "datasourceId" },
+        { from: "conversation" },
         { from: "agentBinding" },
       ],
       inject: {
@@ -39,8 +39,8 @@ const DEFAULT_CONTEXT_INJECTION = {
   },
   "analysis-server": {
     resolve: [
-      { from: "conversation" },
       { from: "requestBody", field: "datasourceId" },
+      { from: "conversation" },
       { from: "agentBinding" },
     ],
     inject: {
