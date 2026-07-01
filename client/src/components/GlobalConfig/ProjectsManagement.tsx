@@ -325,6 +325,49 @@ export default function ProjectsManagement() {
         dataDt: string;
     } | null>(null);
 
+    // DB schema/namespace state for multi-schema datasources (org import)
+    const [orgTableImportSchemas, setOrgTableImportSchemas] = useState<string[]>([]);
+    const [orgTableImportSelectedSchema, setOrgTableImportSelectedSchema] = useState<string | null>(null);
+
+    const qualifiedOrgTable = useCallback(
+        (tableName: string) => {
+            if (orgTableImportSchemas.length <= 1 || !orgTableImportSelectedSchema) return tableName;
+            return `${orgTableImportSelectedSchema}.${tableName}`;
+        },
+        [orgTableImportSchemas.length, orgTableImportSelectedSchema]
+    );
+
+    // KPI Index Entries — 从数据源表导入
+    const [kpiTableImportModalVisible, setKpiTableImportModalVisible] = useState(false);
+    const [kpiTableImportStep, setKpiTableImportStep] = useState<'datasource' | 'table' | 'result'>('datasource');
+    const [kpiTableImportDatasources, setKpiTableImportDatasources] = useState<any[]>([]);
+    const [kpiTableImportSelectedDs, setKpiTableImportSelectedDs] = useState('');
+    const [kpiTableImportTables, setKpiTableImportTables] = useState<string[]>([]);
+    const [kpiTableImportSelectedTable, setKpiTableImportSelectedTable] = useState('');
+    const [kpiTableImportLoading, setKpiTableImportLoading] = useState(false);
+    const [kpiTableImportColumns, setKpiTableImportColumns] = useState<{
+        tableName: string;
+        columns: { name: string; type: string }[];
+        valid: boolean;
+        message: string;
+    } | null>(null);
+    const [kpiTableImportResult, setKpiTableImportResult] = useState<{
+        upserted: number;
+        totalEntries: number;
+    } | null>(null);
+
+    // DB schema/namespace state for multi-schema datasources (KPI import)
+    const [kpiTableImportSchemas, setKpiTableImportSchemas] = useState<string[]>([]);
+    const [kpiTableImportSelectedSchema, setKpiTableImportSelectedSchema] = useState<string | null>(null);
+
+    const qualifiedKpiTable = useCallback(
+        (tableName: string) => {
+            if (kpiTableImportSchemas.length <= 1 || !kpiTableImportSelectedSchema) return tableName;
+            return `${kpiTableImportSelectedSchema}.${tableName}`;
+        },
+        [kpiTableImportSchemas.length, kpiTableImportSelectedSchema]
+    );
+
     // Org Nodes — 数据快照管理
     const [orgDataTimes, setOrgDataTimes] = useState<string[]>([]);
     const [orgActiveDataDt, setOrgActiveDataDt] = useState('');
@@ -1196,12 +1239,55 @@ export default function ProjectsManagement() {
         setOrgTableImportSelectedDs(dsId);
         setOrgTableImportSelectedTable('');
         setOrgTableImportColumns(null);
+        setOrgTableImportSchemas([]);
+        setOrgTableImportSelectedSchema(null);
+        setOrgTableImportTables([]);
         if (!dsId) return;
         setOrgTableImportLoading(true);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/tables`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const schemasRes = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/schemas`);
+            if (!schemasRes.ok) throw new Error(`HTTP ${schemasRes.status}`);
+            const schemasList: string[] = await schemasRes.json();
+            setOrgTableImportSchemas(schemasList || []);
+
+            if (!schemasList || schemasList.length === 0) {
+                const tablesRes = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/tables`);
+                if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
+                const data = await tablesRes.json();
+                setOrgTableImportTables(data || []);
+            } else if (schemasList.length === 1) {
+                const onlySchema = schemasList[0];
+                setOrgTableImportSelectedSchema(onlySchema);
+                const tablesRes = await fetch(
+                    `${DAT_API_BASE}/api/v1/datasources/${dsId}/schemas/${encodeURIComponent(onlySchema)}/tables`
+                );
+                if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
+                const data = await tablesRes.json();
+                setOrgTableImportTables(data || []);
+            } else {
+                // multiple schemas: wait for user selection
+                setOrgTableImportTables([]);
+            }
+        } catch (e) {
+            showToast({ message: `加载 Schema 或表列表失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setOrgTableImportLoading(false);
+        }
+    };
+
+    const onOrgTableImportSchemaChange = async (schema: string) => {
+        setOrgTableImportSelectedSchema(schema || null);
+        setOrgTableImportSelectedTable('');
+        setOrgTableImportColumns(null);
+        setOrgTableImportTables([]);
+        if (!schema || !orgTableImportSelectedDs) return;
+        setOrgTableImportLoading(true);
+        try {
+            const tablesRes = await fetch(
+                `${DAT_API_BASE}/api/v1/datasources/${orgTableImportSelectedDs}/schemas/${encodeURIComponent(schema)}/tables`
+            );
+            if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
+            const data = await tablesRes.json();
             setOrgTableImportTables(data || []);
         } catch (e) {
             showToast({ message: `加载表列表失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
@@ -1216,8 +1302,9 @@ export default function ProjectsManagement() {
         if (!tableName || !orgTableImportSelectedDs) return;
         setOrgTableImportLoading(true);
         try {
+            const qualifiedTable = qualifiedOrgTable(tableName);
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/datasources/${orgTableImportSelectedDs}/tables/${encodeURIComponent(tableName)}/columns`
+                `${DAT_API_BASE}/api/v1/datasources/${orgTableImportSelectedDs}/tables/${encodeURIComponent(qualifiedTable)}/columns`
             );
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
@@ -1227,11 +1314,11 @@ export default function ProjectsManagement() {
             const missing = required.filter((r) => !colNames.includes(r));
             const valid = missing.length === 0;
             setOrgTableImportColumns({
-                tableName: data.tableName || tableName,
+                tableName: data.tableName || qualifiedTable,
                 columns,
                 valid,
                 message: valid
-                    ? `表 ${tableName} 包含 ${columns.length} 列，符合 c_par_brch_level 规范`
+                    ? `表 ${qualifiedTable} 包含 ${columns.length} 列，符合 c_par_brch_level 规范`
                     : `表结构不符合 c_par_brch_level 规范，缺少必填列: ${missing.join(', ')}`,
             });
         } catch (e) {
@@ -1252,13 +1339,14 @@ export default function ProjectsManagement() {
         }
         setOrgTableImportLoading(true);
         try {
+            const qualifiedTable = qualifiedOrgTable(orgTableImportSelectedTable);
             const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/import-from-table`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     projectId: contentManagementProject._id,
                     datasourceId: orgTableImportSelectedDs,
-                    tableName: orgTableImportSelectedTable,
+                    tableName: qualifiedTable,
                 }),
             });
             const body = await response.json().catch(() => null);
@@ -1276,6 +1364,152 @@ export default function ProjectsManagement() {
             showToast({ message: `导入失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
         } finally {
             setOrgTableImportLoading(false);
+        }
+    };
+
+    // ─── 指标库 — 从数据源表导入 ──────────────────────────────────────────
+
+    const openKpiTableImportModal = async () => {
+        if (!contentManagementProject) {
+            showToast({ message: '请先选择项目', status: 'warning' });
+            return;
+        }
+        setKpiTableImportModalVisible(true);
+        setKpiTableImportStep('datasource');
+        setKpiTableImportSelectedDs('');
+        setKpiTableImportTables([]);
+        setKpiTableImportSelectedTable('');
+        setKpiTableImportColumns(null);
+        setKpiTableImportResult(null);
+        setKpiTableImportSchemas([]);
+        setKpiTableImportSelectedSchema(null);
+        try {
+            const response = await fetch(`${DAT_API_BASE}/api/v1/datasources?projectId=${contentManagementProject._id}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            setKpiTableImportDatasources(data || []);
+        } catch (e) {
+            showToast({ message: `加载数据源列表失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const onKpiTableImportDsChange = async (dsId: string) => {
+        setKpiTableImportSelectedDs(dsId);
+        setKpiTableImportSelectedTable('');
+        setKpiTableImportColumns(null);
+        setKpiTableImportSchemas([]);
+        setKpiTableImportSelectedSchema(null);
+        setKpiTableImportTables([]);
+        if (!dsId) return;
+        setKpiTableImportLoading(true);
+        try {
+            const schemasRes = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/schemas`);
+            if (!schemasRes.ok) throw new Error(`HTTP ${schemasRes.status}`);
+            const schemasList: string[] = await schemasRes.json();
+            setKpiTableImportSchemas(schemasList || []);
+
+            if (!schemasList || schemasList.length === 0) {
+                const tablesRes = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/tables`);
+                if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
+                const data = await tablesRes.json();
+                setKpiTableImportTables(data || []);
+            } else if (schemasList.length === 1) {
+                const onlySchema = schemasList[0];
+                setKpiTableImportSelectedSchema(onlySchema);
+                const tablesRes = await fetch(
+                    `${DAT_API_BASE}/api/v1/datasources/${dsId}/schemas/${encodeURIComponent(onlySchema)}/tables`
+                );
+                if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
+                const data = await tablesRes.json();
+                setKpiTableImportTables(data || []);
+            } else {
+                // multiple schemas: wait for user selection
+                setKpiTableImportTables([]);
+            }
+        } catch (e) {
+            showToast({ message: `加载 Schema 或表列表失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setKpiTableImportLoading(false);
+        }
+    };
+
+    const onKpiTableImportSchemaChange = async (schema: string) => {
+        setKpiTableImportSelectedSchema(schema || null);
+        setKpiTableImportSelectedTable('');
+        setKpiTableImportColumns(null);
+        setKpiTableImportTables([]);
+        if (!schema || !kpiTableImportSelectedDs) return;
+        setKpiTableImportLoading(true);
+        try {
+            const tablesRes = await fetch(
+                `${DAT_API_BASE}/api/v1/datasources/${kpiTableImportSelectedDs}/schemas/${encodeURIComponent(schema)}/tables`
+            );
+            if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
+            const data = await tablesRes.json();
+            setKpiTableImportTables(data || []);
+        } catch (e) {
+            showToast({ message: `加载表列表失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setKpiTableImportLoading(false);
+        }
+    };
+
+    const onKpiTableImportTableChange = async (tableName: string) => {
+        setKpiTableImportSelectedTable(tableName);
+        setKpiTableImportColumns(null);
+        if (!tableName || !kpiTableImportSelectedDs) return;
+        setKpiTableImportLoading(true);
+        try {
+            const qualifiedTable = qualifiedKpiTable(tableName);
+            const response = await fetch(
+                `${DAT_API_BASE}/api/v1/datasources/${kpiTableImportSelectedDs}/tables/${encodeURIComponent(qualifiedTable)}/columns`
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            setKpiTableImportColumns(data);
+        } catch (e) {
+            showToast({ message: `校验表结构失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setKpiTableImportLoading(false);
+        }
+    };
+
+    const handleKpiImportFromTable = async () => {
+        if (!contentManagementProject || !kpiTableImportSelectedDs || !kpiTableImportSelectedTable) {
+            showToast({ message: '请选择数据源和表', status: 'warning' });
+            return;
+        }
+        if (!kpiTableImportColumns?.valid) {
+            showToast({ message: '表结构校验未通过，无法导入', status: 'warning' });
+            return;
+        }
+        setKpiTableImportLoading(true);
+        try {
+            const qualifiedTable = qualifiedKpiTable(kpiTableImportSelectedTable);
+            const response = await fetch(`${DAT_API_BASE}/api/v1/index/entries/import-from-table`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectId: contentManagementProject._id,
+                    datasourceId: kpiTableImportSelectedDs,
+                    tableName: qualifiedTable,
+                }),
+            });
+            const body = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(body?.message || `HTTP ${response.status}`);
+            }
+            setKpiTableImportResult(body);
+            setKpiTableImportStep('result');
+            showToast({
+                message: `导入成功: 写入 ${body.upserted} 条，展开 ${body.totalEntries} 条`,
+                status: 'success',
+            });
+            await loadIndexEntries(contentManagementProject._id);
+        } catch (e) {
+            showToast({ message: `导入失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setKpiTableImportLoading(false);
         }
     };
 
@@ -2246,6 +2480,13 @@ export default function ProjectsManagement() {
                                                 <Plus className="h-4 w-4" /> 添加
                                             </Button>
                                             <Button
+                                                onClick={openKpiTableImportModal}
+                                                disabled={!contentManagementProject}
+                                                className="btn btn-neutral text-sm flex items-center gap-1 disabled:opacity-50"
+                                            >
+                                                <Database className="h-4 w-4" /> 从数据源导入
+                                            </Button>
+                                            <Button
                                                 onClick={() => setIndexUploadModalVisible(true)}
                                                 className="btn btn-neutral text-sm flex items-center gap-1"
                                             >
@@ -2745,16 +2986,16 @@ export default function ProjectsManagement() {
                 </div>
             )}
 
-            {/* Org Table Import Modal (从数据源表导入机构信息) */}
-            {orgTableImportModalVisible && (
+            {/* KPI Table Import Modal (从数据源表导入指标库) */}
+            {kpiTableImportModalVisible && (
                 <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
                     <div className="w-full max-w-2xl rounded-lg border border-border-light bg-surface-primary shadow-lg">
                         <div className="flex items-center justify-between border-b border-border-light p-4">
-                            <h3 className="text-lg font-semibold text-text-primary">从数据源表导入机构信息</h3>
+                            <h3 className="text-lg font-semibold text-text-primary">从数据源表导入指标库</h3>
                             <button
                                 onClick={() => {
-                                    setOrgTableImportModalVisible(false);
-                                    setOrgTableImportResult(null);
+                                    setKpiTableImportModalVisible(false);
+                                    setKpiTableImportResult(null);
                                 }}
                                 className="rounded p-1 text-text-secondary hover:bg-surface-hover"
                             >
@@ -2770,7 +3011,7 @@ export default function ProjectsManagement() {
                                 { key: 'result', label: '导入完成', step: 2 },
                             ].map((s) => {
                                 const currentStep =
-                                    orgTableImportStep === 'datasource' ? 0 : orgTableImportStep === 'table' ? 1 : 2;
+                                    kpiTableImportStep === 'datasource' ? 0 : kpiTableImportStep === 'table' ? 1 : 2;
                                 return (
                                     <div key={s.key} className="flex items-center">
                                         <div
@@ -2800,15 +3041,15 @@ export default function ProjectsManagement() {
                         </div>
 
                         {/* Step 1: 选择数据源 */}
-                        {orgTableImportStep === 'datasource' && (
+                        {kpiTableImportStep === 'datasource' && (
                             <div className="p-4 space-y-3">
                                 <select
-                                    value={orgTableImportSelectedDs}
-                                    onChange={(e) => onOrgTableImportDsChange(e.target.value)}
+                                    value={kpiTableImportSelectedDs}
+                                    onChange={(e) => onKpiTableImportDsChange(e.target.value)}
                                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 >
                                     <option value="">请选择数据源</option>
-                                    {orgTableImportDatasources.map((ds: any) => (
+                                    {kpiTableImportDatasources.map((ds: any) => (
                                         <option key={ds.id} value={ds.id}>
                                             {ds.name} ({ds.provider})
                                         </option>
@@ -2817,8 +3058,12 @@ export default function ProjectsManagement() {
                                 <div className="text-right">
                                     <button
                                         type="button"
-                                        onClick={() => setOrgTableImportStep('table')}
-                                        disabled={!orgTableImportSelectedDs || orgTableImportTables.length === 0}
+                                        onClick={() => setKpiTableImportStep('table')}
+                                        disabled={
+                                            !kpiTableImportSelectedDs ||
+                                            kpiTableImportLoading ||
+                                            (kpiTableImportSchemas.length <= 1 && kpiTableImportTables.length === 0)
+                                        }
                                         className="btn btn-primary text-sm px-3 py-1.5 disabled:opacity-50"
                                     >
                                         下一步
@@ -2828,49 +3073,68 @@ export default function ProjectsManagement() {
                         )}
 
                         {/* Step 2: 选择表并校验 */}
-                        {orgTableImportStep === 'table' && (
+                        {kpiTableImportStep === 'table' && (
                             <div className="p-4 space-y-3">
-                                {orgTableImportLoading ? (
+                                {kpiTableImportLoading ? (
                                     <div className="flex items-center justify-center py-8 text-sm text-text-secondary">
                                         正在加载...
                                     </div>
                                 ) : (
-                                    <select
-                                        value={orgTableImportSelectedTable}
-                                        onChange={(e) => onOrgTableImportTableChange(e.target.value)}
-                                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    >
-                                        <option value="">请选择表（如 c_par_brch_level）</option>
-                                        {orgTableImportTables.map((t) => (
-                                            <option key={t} value={t}>
-                                                {t}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <>
+                                        {kpiTableImportSchemas.length > 1 && (
+                                            <div className="space-y-1.5">
+                                                <label className="block text-sm font-medium text-text-secondary">
+                                                    数据库 Schema
+                                                </label>
+                                                <select
+                                                    value={kpiTableImportSelectedSchema || ''}
+                                                    onChange={(e) => onKpiTableImportSchemaChange(e.target.value)}
+                                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                >
+                                                    <option value="">请选择 Schema</option>
+                                                    {kpiTableImportSchemas.map((schema) => (
+                                                        <option key={schema} value={schema}>
+                                                            {schema}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                        <select
+                                            value={kpiTableImportSelectedTable}
+                                            onChange={(e) => onKpiTableImportTableChange(e.target.value)}
+                                            disabled={kpiTableImportSchemas.length > 1 && !kpiTableImportSelectedSchema}
+                                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white disabled:opacity-60"
+                                        >
+                                            <option value="">请选择表（如 kpi_info）</option>
+                                            {kpiTableImportTables.map((t) => (
+                                                <option key={t} value={t}>
+                                                    {t}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </>
                                 )}
 
                                 {/* Schema 校验结果 */}
-                                {orgTableImportColumns && (
+                                {kpiTableImportColumns && (
                                     <div>
                                         <div
                                             className={cn(
                                                 'rounded-md p-3 text-sm',
-                                                orgTableImportColumns.valid
+                                                kpiTableImportColumns.valid
                                                     ? 'border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400'
                                                     : 'border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
                                             )}
                                         >
                                             <p className="font-medium">
-                                                {orgTableImportColumns.valid ? 'Schema 校验通过' : 'Schema 校验失败'}
+                                                {kpiTableImportColumns.valid ? 'Schema 校验通过' : 'Schema 校验失败'}
                                             </p>
-                                            <p className="mt-1 text-xs opacity-80">{orgTableImportColumns.message}</p>
+                                            <p className="mt-1 text-xs opacity-80">{kpiTableImportColumns.message}</p>
                                         </div>
-                                        <p className="mt-1 text-xs text-text-tertiary">
-                                            必填列: data_dt / brchno / brchna / brchup / brchlv
-                                        </p>
-                                        {orgTableImportColumns.columns.length > 0 && (
+                                        {kpiTableImportColumns.columns.length > 0 && (
                                             <div className="mt-2 flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-                                                {orgTableImportColumns.columns.map((c) => (
+                                                {kpiTableImportColumns.columns.map((c) => (
                                                     <span
                                                         key={c.name}
                                                         className="inline-flex items-center rounded bg-surface-secondary px-2 py-0.5 text-xs text-text-secondary"
@@ -2886,25 +3150,25 @@ export default function ProjectsManagement() {
                                 <div className="flex justify-end gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => setOrgTableImportStep('datasource')}
+                                        onClick={() => setKpiTableImportStep('datasource')}
                                         className="btn btn-neutral text-sm px-3 py-1.5"
                                     >
                                         上一步
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={handleOrgImportFromTable}
-                                        disabled={!orgTableImportColumns?.valid || orgTableImportLoading}
+                                        onClick={handleKpiImportFromTable}
+                                        disabled={!kpiTableImportColumns?.valid || kpiTableImportLoading}
                                         className="btn btn-primary text-sm px-3 py-1.5 disabled:opacity-50"
                                     >
-                                        {orgTableImportLoading ? '导入中...' : '开始导入'}
+                                        {kpiTableImportLoading ? '导入中...' : '开始导入'}
                                     </button>
                                 </div>
                             </div>
                         )}
 
                         {/* Step 3: 导入结果 */}
-                        {orgTableImportStep === 'result' && orgTableImportResult && (
+                        {kpiTableImportStep === 'result' && kpiTableImportResult && (
                             <div className="p-4 space-y-4">
                                 <div className="flex flex-col items-center py-3">
                                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
@@ -2923,22 +3187,22 @@ export default function ProjectsManagement() {
                                         </svg>
                                     </div>
                                     <p className="mt-2 text-sm font-medium text-text-primary">导入成功</p>
-                                    <p className="text-xs text-text-tertiary">从数据源表成功导入机构信息</p>
+                                    <p className="text-xs text-text-tertiary">从数据源表成功导入指标库</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 rounded-md border border-border-light bg-surface-secondary/40 p-3 text-sm">
                                     <div>
-                                        <span className="text-text-tertiary">导入节点数：</span>
-                                        <span className="font-semibold text-green-500">{orgTableImportResult.imported}</span>
+                                        <span className="text-text-tertiary">写入条数：</span>
+                                        <span className="font-semibold text-green-500">{kpiTableImportResult.upserted}</span>
                                     </div>
                                     <div>
-                                        <span className="text-text-tertiary">数据日期 (dataDt)：</span>
-                                        <span className="font-mono text-text-primary">{orgTableImportResult.dataDt}</span>
+                                        <span className="text-text-tertiary">展开条数：</span>
+                                        <span className="font-mono text-text-primary">{kpiTableImportResult.totalEntries}</span>
                                     </div>
                                 </div>
                                 <div className="text-center">
                                     <button
                                         type="button"
-                                        onClick={() => setOrgTableImportModalVisible(false)}
+                                        onClick={() => setKpiTableImportModalVisible(false)}
                                         className="btn btn-primary text-sm px-4 py-1.5"
                                     >
                                         关闭
