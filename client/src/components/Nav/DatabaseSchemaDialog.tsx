@@ -10,9 +10,9 @@ import {
 } from "@because/client";
 import { Database, RefreshCw, X, Search } from "lucide-react";
 import { cn } from "~/utils";
+import { getDatApiBaseUrl } from "~/utils/datApi";
 
-const DAT_API_BASE =
-  import.meta.env.VITE_DAT_OPENAPI_BASE_URL || "http://localhost:8080";
+const DAT_API_BASE = getDatApiBaseUrl();
 
 // 数据源接口定义
 interface DatDatasource {

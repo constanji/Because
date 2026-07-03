@@ -33,6 +33,7 @@ services:
       - DOMAIN_CLIENT=http://localhost:4514
       - DOMAIN_SERVER=http://localhost:1145
       - ENDPOINTS=agents  # 只启用 agents 标准端点，自定义端点（deepseek、modelscope）会自动加载
+      - DAT_OPENAPI_BASE_URL=http://host.docker.internal:8080
     volumes:
       # 挂载源代码以实现热重载
       - .:/app:cached

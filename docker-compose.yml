@@ -24,8 +24,7 @@ services:
       - RAG_API_URL=http://rag_api:${RAG_PORT:-54900}
       - BECAUSE_LOG_DIR=/app/api/logs
       - CONFIG_PATH=/app/Because.yaml
-      - VITE_DAT_OPENAPI_BASE_URL=http://localhost:8080
-      - VITE_DAT_OPENAPI_BASE_URL=http://host.docker.internal:8080
+      - DAT_OPENAPI_BASE_URL=http://host.docker.internal:8080
 
     volumes:
       - type: bind

@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Button, useToastContext } from '@because/client';
 import { useAuthContext } from '~/hooks';
 import { cn } from '~/utils';
+import { getDatApiBaseUrl } from '~/utils/datApi';
 import * as Ariakit from '@ariakit/react';
 import { RefreshCw, User as UserIcon, Mail, Calendar, Download, Eye, X, List, Grid, Settings, Shield, User, Trash2, Network, Pencil } from 'lucide-react';
 
-const DAT_API_BASE = import.meta.env.VITE_DAT_OPENAPI_BASE_URL || 'http://localhost:8080';
+const DAT_API_BASE = getDatApiBaseUrl();
 
 interface User {
   _id: string;

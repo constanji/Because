@@ -684,6 +684,7 @@ export type TStartupConfig = {
   >;
   mcpPlaceholder?: string;
   conversationImportMaxFileSize?: number;
+  datOpenapiBaseUrl?: string;
 };
 
 export enum OCRStrategy {

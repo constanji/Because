@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, useToastContext } from '@because/client';
 import { useAuthContext } from '~/hooks';
 import { cn } from '~/utils';
+import { getDatApiBaseUrl } from '~/utils/datApi';
 import {
     RefreshCw,
     Plus,
@@ -30,7 +31,7 @@ import ProviderConfigForm from './components/ProviderConfigForm';
 import EmailSenderConfig from './components/EmailSenderConfig';
 import McpServersConfig from './components/McpServersConfig';
 
-const DAT_API_BASE = import.meta.env.VITE_DAT_OPENAPI_BASE_URL || 'http://localhost:8080';
+const DAT_API_BASE = getDatApiBaseUrl();
 
 interface OrgTreeNode {
     key: string;

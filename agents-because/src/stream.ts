@@ -1,4 +1,5 @@
 // src/stream.ts
+import { nanoid } from 'nanoid';
 import type { ChatOpenAIReasoningSummary } from '@langchain/openai';
 import type { AIMessageChunk } from '@langchain/core/messages';
 import type { ToolCall } from '@langchain/core/messages/tool';
@@ -133,6 +134,11 @@ export function getChunkContent({
 }
 
 export class ChatModelStreamHandler implements t.EventHandler {
+  // Buffer for <tool_call> XML text parsing (some models like qwen output
+  // tool calls as plain text instead of using the structured tool_calls API)
+  private toolCallXmlBuffer: string = '';
+  private isBufferingToolCallXml: boolean = false;
+
   async handle(
     event: string,
     data: t.StreamEventData,
@@ -280,6 +286,32 @@ hasToolCallChunks: ${hasToolCallChunks}
     ) {
       return;
     } else if (typeof content === 'string') {
+      // Some models (e.g., qwen-72b via DashScope) occasionally output tool
+      // calls as <tool_call>{"name":"...","arguments":{...}}</tool_call> XML
+      // text instead of using the structured tool_calls API. Buffer and parse
+      // this content so the tool gets executed rather than leaked as text.
+      const TOOL_CALL_XML_OPEN = '<tool_call>';
+      const TOOL_CALL_XML_CLOSE = '</tool_call>';
+
+      if (this.isBufferingToolCallXml || content.includes(TOOL_CALL_XML_OPEN)) {
+        this.isBufferingToolCallXml = true;
+
+        // Strip opening tag off the first chunk if it's present
+        const openIdx = content.indexOf(TOOL_CALL_XML_OPEN);
+        const start = openIdx !== -1 ? openIdx + TOOL_CALL_XML_OPEN.length : 0;
+        const closeIdx = content.indexOf(TOOL_CALL_XML_CLOSE);
+
+        if (closeIdx !== -1) {
+          // Closing tag found — finalize buffer
+          this.toolCallXmlBuffer += content.slice(start, closeIdx);
+          await this.finalizeToolCallXmlBuffer(graph, metadata);
+        } else {
+          // Still accumulating
+          this.toolCallXmlBuffer += content.slice(start);
+        }
+        return;
+      }
+
       if (agentContext.currentTokenType === ContentTypes.TEXT) {
         await graph.dispatchMessageDelta(stepId, {
           content: [
@@ -363,6 +395,67 @@ hasToolCallChunks: ${hasToolCallChunks}
       });
     }
   }
+
+  /**
+   * Parses the accumulated <tool_call> XML text buffer into structured tool
+   * calls and dispatches them. This handles models (e.g., qwen-72b via
+   * DashScope) that occasionally output tool calls as plain-text XML instead
+   * of using the standard structured tool_calls API field.
+   */
+  private async finalizeToolCallXmlBuffer(
+    graph: StandardGraph,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    this.isBufferingToolCallXml = false;
+    const raw = this.toolCallXmlBuffer.trim();
+    this.toolCallXmlBuffer = '';
+
+    if (!raw) {
+      return;
+    }
+
+    // The XML body contains JSON like: {"name":"ask_data","arguments":{...}}
+    // or sometimes: \n{"name":"...","arguments":{...}}\n
+    let toolCallData: { name?: string; arguments?: Record<string, unknown> };
+    try {
+      toolCallData = JSON.parse(raw);
+    } catch {
+      console.warn(
+        '[Stream] Failed to parse <tool_call> XML body as JSON:',
+        raw.slice(0, 200),
+      );
+      return;
+    }
+
+    const name = toolCallData.name;
+    const args = toolCallData.arguments ?? {};
+
+    if (!name) {
+      console.warn(
+        '[Stream] <tool_call> XML parsed but missing tool name:',
+        raw.slice(0, 200),
+      );
+      return;
+    }
+
+    const toolCall: Partial<ToolCall> = {
+      id: `toolu_${nanoid()}`,
+      name,
+      args,
+      type: 'tool_call' as const,
+    };
+
+    console.log(
+      `[Stream] Converted <tool_call> XML to structured tool call: ${name}`,
+    );
+
+    await handleToolCalls(
+      [toolCall as ToolCall],
+      metadata,
+      graph,
+    );
+  }
+
   handleReasoning(
     chunk: Partial<AIMessageChunk>,
     agentContext: AgentContext

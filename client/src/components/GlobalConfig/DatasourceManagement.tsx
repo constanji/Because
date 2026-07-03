@@ -10,6 +10,7 @@ import { useAuthContext } from "~/hooks";
 import { useListAgentsQuery } from "~/data-provider";
 import { PermissionBits } from "@because/data-provider";
 import { cn } from "~/utils";
+import { getDatApiBaseUrl } from "~/utils/datApi";
 import {
   RefreshCw,
   Plus,
@@ -32,8 +33,7 @@ import {
   Star,
 } from "lucide-react";
 
-const DAT_API_BASE =
-  import.meta.env.VITE_DAT_OPENAPI_BASE_URL || "http://localhost:8080";
+const DAT_API_BASE = getDatApiBaseUrl();
 
 interface DatProject {
   _id: string;

@@ -8,10 +8,10 @@ import { loginPage } from "@because/data-provider";
 import type { TRegisterUser, TError } from "@because/data-provider";
 import type { TLoginLayoutContext } from "~/common";
 import { useLocalize, TranslationKeys } from "~/hooks";
+import { getDatApiBaseUrl } from "~/utils/datApi";
 import { ErrorMessage } from "./ErrorMessage";
 
-const DAT_API_BASE =
-  import.meta.env.VITE_DAT_OPENAPI_BASE_URL || "http://localhost:8080";
+const DAT_API_BASE = getDatApiBaseUrl();
 
 type DatProjectOption = { _id: string; name: string };
 type OrgFlatOption = {
