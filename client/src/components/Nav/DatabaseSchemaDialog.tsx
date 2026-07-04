@@ -12,8 +12,6 @@ import { Database, RefreshCw, X, Search } from "lucide-react";
 import { cn } from "~/utils";
 import { getDatApiBaseUrl } from "~/utils/datApi";
 
-const DAT_API_BASE = getDatApiBaseUrl();
-
 // 数据源接口定义
 interface DatDatasource {
   _id: string;
@@ -119,7 +117,7 @@ export default function DatabaseSchemaDialog({
     try {
       setLoadingSchema(true);
       const response = await fetch(
-        `${DAT_API_BASE}/api/v1/content-store/light-schema/list?projectId=${datasource.projectId}&datasourceId=${datasource._id}`
+        `${getDatApiBaseUrl()}/api/v1/content-store/light-schema/list?projectId=${datasource.projectId}&datasourceId=${datasource._id}`
       );
 
       if (!response.ok) {

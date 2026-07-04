@@ -10,9 +10,6 @@ import type { TLoginLayoutContext } from "~/common";
 import { useLocalize, TranslationKeys } from "~/hooks";
 import { getDatApiBaseUrl } from "~/utils/datApi";
 import { ErrorMessage } from "./ErrorMessage";
-
-const DAT_API_BASE = getDatApiBaseUrl();
-
 type DatProjectOption = { _id: string; name: string };
 type OrgFlatOption = {
   orgCode: string;
@@ -97,7 +94,7 @@ const Registration: React.FC = () => {
       setOrgOptions([]);
       return;
     }
-    fetch(`${DAT_API_BASE}/api/v1/org/nodes?projectId=${orgProjectId}`)
+    fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes?projectId=${orgProjectId}`)
       .then((r) =>
         r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)),
       )

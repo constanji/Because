@@ -31,8 +31,6 @@ import ProviderConfigForm from './components/ProviderConfigForm';
 import EmailSenderConfig from './components/EmailSenderConfig';
 import McpServersConfig from './components/McpServersConfig';
 
-const DAT_API_BASE = getDatApiBaseUrl();
-
 interface OrgTreeNode {
     key: string;
     title: string;
@@ -667,7 +665,7 @@ export default function ProjectsManagement() {
     const loadSqlPairs = async (projectId: string) => {
         setContentLoading(true);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/sql-pairs?projectId=${projectId}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/sql-pairs?projectId=${projectId}`);
             if (response.ok) {
                 const data = await response.json();
                 setSqlPairs(data || []);
@@ -688,7 +686,7 @@ export default function ProjectsManagement() {
         setContentLoading(true);
         try {
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/content-store/sql-pairs/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(sqlSearchQuery)}`
+                `${getDatApiBaseUrl()}/api/v1/content-store/sql-pairs/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(sqlSearchQuery)}`
             );
             if (response.ok) {
                 const data = await response.json();
@@ -708,7 +706,7 @@ export default function ProjectsManagement() {
             return;
         }
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/sql-pairs?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/sql-pairs?projectId=${contentManagementProject._id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(sqlForm)
@@ -729,7 +727,7 @@ export default function ProjectsManagement() {
     const handleRemoveSqlPair = async (id: string) => {
         if (!contentManagementProject) return;
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/sql-pairs/${id}?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/sql-pairs/${id}?projectId=${contentManagementProject._id}`, {
                 method: 'DELETE'
             });
             if (response.ok) {
@@ -745,7 +743,7 @@ export default function ProjectsManagement() {
         if (!contentManagementProject) return;
         if (!confirm('确定要清空所有SQL示例对吗？此操作不可恢复！')) return;
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/sql-pairs?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/sql-pairs?projectId=${contentManagementProject._id}`, {
                 method: 'DELETE'
             });
             if (response.ok) {
@@ -761,7 +759,7 @@ export default function ProjectsManagement() {
     const loadSynonyms = async (projectId: string) => {
         setContentLoading(true);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/synonyms?projectId=${projectId}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/synonyms?projectId=${projectId}`);
             if (response.ok) {
                 const data = await response.json();
                 setSynonyms(data || []);
@@ -782,7 +780,7 @@ export default function ProjectsManagement() {
         setContentLoading(true);
         try {
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/content-store/synonyms/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(synSearchQuery)}`
+                `${getDatApiBaseUrl()}/api/v1/content-store/synonyms/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(synSearchQuery)}`
             );
             if (response.ok) {
                 const data = await response.json();
@@ -802,7 +800,7 @@ export default function ProjectsManagement() {
             return;
         }
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/synonyms?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/synonyms?projectId=${contentManagementProject._id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -826,7 +824,7 @@ export default function ProjectsManagement() {
     const handleRemoveSynonym = async (id: string) => {
         if (!contentManagementProject) return;
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/synonyms/${id}?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/synonyms/${id}?projectId=${contentManagementProject._id}`, {
                 method: 'DELETE'
             });
             if (response.ok) {
@@ -842,7 +840,7 @@ export default function ProjectsManagement() {
         if (!contentManagementProject) return;
         if (!confirm('确定要清空所有同义词吗？此操作不可恢复！')) return;
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/synonyms?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/synonyms?projectId=${contentManagementProject._id}`, {
                 method: 'DELETE'
             });
             if (response.ok) {
@@ -858,7 +856,7 @@ export default function ProjectsManagement() {
     const loadDocs = async (projectId: string) => {
         setContentLoading(true);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs?projectId=${projectId}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/docs?projectId=${projectId}`);
             if (response.ok) {
                 const data = await response.json();
                 setDocs(data || []);
@@ -879,7 +877,7 @@ export default function ProjectsManagement() {
         setContentLoading(true);
         try {
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/content-store/docs/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(docSearchQuery)}`
+                `${getDatApiBaseUrl()}/api/v1/content-store/docs/retrieve?projectId=${contentManagementProject._id}&query=${encodeURIComponent(docSearchQuery)}`
             );
             if (response.ok) {
                 const data = await response.json();
@@ -899,7 +897,7 @@ export default function ProjectsManagement() {
             return;
         }
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/docs?projectId=${contentManagementProject._id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: docForm.content })
@@ -920,7 +918,7 @@ export default function ProjectsManagement() {
     const handleRemoveDoc = async (id: string) => {
         if (!contentManagementProject) return;
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs/${id}?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/docs/${id}?projectId=${contentManagementProject._id}`, {
                 method: 'DELETE'
             });
             if (response.ok) {
@@ -936,7 +934,7 @@ export default function ProjectsManagement() {
         if (!contentManagementProject) return;
         if (!confirm('确定要清空所有业务知识吗？此操作不可恢复！')) return;
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/docs?projectId=${contentManagementProject._id}`, {
                 method: 'DELETE'
             });
             if (response.ok) {
@@ -955,7 +953,7 @@ export default function ProjectsManagement() {
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const response = await fetch(`${DAT_API_BASE}/api/v1/content-store/docs/upload?projectId=${contentManagementProject._id}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/content-store/docs/upload?projectId=${contentManagementProject._id}`, {
                 method: 'POST',
                 body: formData
             });
@@ -1000,7 +998,7 @@ export default function ProjectsManagement() {
     const loadIndexEntries = async (projectId: string) => {
         setContentLoading(true);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/index/entries?projectId=${projectId}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/index/entries?projectId=${projectId}`);
             if (response.ok) {
                 const data = await response.json();
                 setIndexEntries(data || []);
@@ -1021,7 +1019,7 @@ export default function ProjectsManagement() {
         const projectId = contentManagementProject._id;
         setContentLoading(true);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/index/entries?projectId=${projectId}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/index/entries?projectId=${projectId}`);
             if (!response.ok) throw new Error('加载失败');
             const all: IndexEntry[] = await response.json();
             const q = indexSearchQuery.trim();
@@ -1078,7 +1076,7 @@ export default function ProjectsManagement() {
             .filter((s) => s.length > 0 && s !== standardName.trim());
         try {
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/index/entries?projectId=${contentManagementProject._id}`,
+                `${getDatApiBaseUrl()}/api/v1/index/entries?projectId=${contentManagementProject._id}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1106,7 +1104,7 @@ export default function ProjectsManagement() {
     const handleRemoveIndexEntry = async (id: string) => {
         if (!contentManagementProject) return;
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/index/entries/${id}`, { method: 'DELETE' });
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/index/entries/${id}`, { method: 'DELETE' });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             showToast({ message: '删除成功', status: 'success' });
             loadIndexEntries(contentManagementProject._id);
@@ -1120,7 +1118,7 @@ export default function ProjectsManagement() {
         if (!confirm('确定要清空该项目下所有指标吗？此操作不可恢复！')) return;
         try {
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/index/entries/all?projectId=${contentManagementProject._id}`,
+                `${getDatApiBaseUrl()}/api/v1/index/entries/all?projectId=${contentManagementProject._id}`,
                 { method: 'DELETE' }
             );
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1140,7 +1138,7 @@ export default function ProjectsManagement() {
             const formData = new FormData();
             formData.append('file', file);
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/index/entries/upload?projectId=${contentManagementProject._id}`,
+                `${getDatApiBaseUrl()}/api/v1/index/entries/upload?projectId=${contentManagementProject._id}`,
                 { method: 'POST', body: formData }
             );
             if (!response.ok) {
@@ -1182,7 +1180,7 @@ export default function ProjectsManagement() {
     const loadOrgNodes = async (projectId: string) => {
         setOrgNodesLoading(true);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes?projectId=${projectId}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes?projectId=${projectId}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const tree = await response.json();
             setOrgNodesTree((tree || []).map(toTreeNode));
@@ -1200,7 +1198,7 @@ export default function ProjectsManagement() {
         if (!confirm('将清空该项目下全部机构信息，清空后所有指标问数权限失效。是否继续？')) return;
         try {
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/org/nodes/all?projectId=${contentManagementProject._id}`,
+                `${getDatApiBaseUrl()}/api/v1/org/nodes/all?projectId=${contentManagementProject._id}`,
                 { method: 'DELETE' }
             );
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1227,7 +1225,7 @@ export default function ProjectsManagement() {
         setOrgTableImportColumns(null);
         setOrgTableImportResult(null);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/datasources?projectId=${contentManagementProject._id}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/datasources?projectId=${contentManagementProject._id}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             setOrgTableImportDatasources(data || []);
@@ -1246,13 +1244,13 @@ export default function ProjectsManagement() {
         if (!dsId) return;
         setOrgTableImportLoading(true);
         try {
-            const schemasRes = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/schemas`);
+            const schemasRes = await fetch(`${getDatApiBaseUrl()}/api/v1/datasources/${dsId}/schemas`);
             if (!schemasRes.ok) throw new Error(`HTTP ${schemasRes.status}`);
             const schemasList: string[] = await schemasRes.json();
             setOrgTableImportSchemas(schemasList || []);
 
             if (!schemasList || schemasList.length === 0) {
-                const tablesRes = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/tables`);
+                const tablesRes = await fetch(`${getDatApiBaseUrl()}/api/v1/datasources/${dsId}/tables`);
                 if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
                 const data = await tablesRes.json();
                 setOrgTableImportTables(data || []);
@@ -1260,7 +1258,7 @@ export default function ProjectsManagement() {
                 const onlySchema = schemasList[0];
                 setOrgTableImportSelectedSchema(onlySchema);
                 const tablesRes = await fetch(
-                    `${DAT_API_BASE}/api/v1/datasources/${dsId}/schemas/${encodeURIComponent(onlySchema)}/tables`
+                    `${getDatApiBaseUrl()}/api/v1/datasources/${dsId}/schemas/${encodeURIComponent(onlySchema)}/tables`
                 );
                 if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
                 const data = await tablesRes.json();
@@ -1285,7 +1283,7 @@ export default function ProjectsManagement() {
         setOrgTableImportLoading(true);
         try {
             const tablesRes = await fetch(
-                `${DAT_API_BASE}/api/v1/datasources/${orgTableImportSelectedDs}/schemas/${encodeURIComponent(schema)}/tables`
+                `${getDatApiBaseUrl()}/api/v1/datasources/${orgTableImportSelectedDs}/schemas/${encodeURIComponent(schema)}/tables`
             );
             if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
             const data = await tablesRes.json();
@@ -1305,7 +1303,7 @@ export default function ProjectsManagement() {
         try {
             const qualifiedTable = qualifiedOrgTable(tableName);
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/datasources/${orgTableImportSelectedDs}/tables/${encodeURIComponent(qualifiedTable)}/columns`
+                `${getDatApiBaseUrl()}/api/v1/datasources/${orgTableImportSelectedDs}/tables/${encodeURIComponent(qualifiedTable)}/columns`
             );
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
@@ -1341,7 +1339,7 @@ export default function ProjectsManagement() {
         setOrgTableImportLoading(true);
         try {
             const qualifiedTable = qualifiedOrgTable(orgTableImportSelectedTable);
-            const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/import-from-table`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes/import-from-table`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1385,7 +1383,7 @@ export default function ProjectsManagement() {
         setKpiTableImportSchemas([]);
         setKpiTableImportSelectedSchema(null);
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/datasources?projectId=${contentManagementProject._id}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/datasources?projectId=${contentManagementProject._id}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             setKpiTableImportDatasources(data || []);
@@ -1404,13 +1402,13 @@ export default function ProjectsManagement() {
         if (!dsId) return;
         setKpiTableImportLoading(true);
         try {
-            const schemasRes = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/schemas`);
+            const schemasRes = await fetch(`${getDatApiBaseUrl()}/api/v1/datasources/${dsId}/schemas`);
             if (!schemasRes.ok) throw new Error(`HTTP ${schemasRes.status}`);
             const schemasList: string[] = await schemasRes.json();
             setKpiTableImportSchemas(schemasList || []);
 
             if (!schemasList || schemasList.length === 0) {
-                const tablesRes = await fetch(`${DAT_API_BASE}/api/v1/datasources/${dsId}/tables`);
+                const tablesRes = await fetch(`${getDatApiBaseUrl()}/api/v1/datasources/${dsId}/tables`);
                 if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
                 const data = await tablesRes.json();
                 setKpiTableImportTables(data || []);
@@ -1418,7 +1416,7 @@ export default function ProjectsManagement() {
                 const onlySchema = schemasList[0];
                 setKpiTableImportSelectedSchema(onlySchema);
                 const tablesRes = await fetch(
-                    `${DAT_API_BASE}/api/v1/datasources/${dsId}/schemas/${encodeURIComponent(onlySchema)}/tables`
+                    `${getDatApiBaseUrl()}/api/v1/datasources/${dsId}/schemas/${encodeURIComponent(onlySchema)}/tables`
                 );
                 if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
                 const data = await tablesRes.json();
@@ -1443,7 +1441,7 @@ export default function ProjectsManagement() {
         setKpiTableImportLoading(true);
         try {
             const tablesRes = await fetch(
-                `${DAT_API_BASE}/api/v1/datasources/${kpiTableImportSelectedDs}/schemas/${encodeURIComponent(schema)}/tables`
+                `${getDatApiBaseUrl()}/api/v1/datasources/${kpiTableImportSelectedDs}/schemas/${encodeURIComponent(schema)}/tables`
             );
             if (!tablesRes.ok) throw new Error(`HTTP ${tablesRes.status}`);
             const data = await tablesRes.json();
@@ -1463,7 +1461,7 @@ export default function ProjectsManagement() {
         try {
             const qualifiedTable = qualifiedKpiTable(tableName);
             const response = await fetch(
-                `${DAT_API_BASE}/api/v1/datasources/${kpiTableImportSelectedDs}/tables/${encodeURIComponent(qualifiedTable)}/columns`
+                `${getDatApiBaseUrl()}/api/v1/datasources/${kpiTableImportSelectedDs}/tables/${encodeURIComponent(qualifiedTable)}/columns`
             );
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
@@ -1487,7 +1485,7 @@ export default function ProjectsManagement() {
         setKpiTableImportLoading(true);
         try {
             const qualifiedTable = qualifiedKpiTable(kpiTableImportSelectedTable);
-            const response = await fetch(`${DAT_API_BASE}/api/v1/index/entries/import-from-table`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/index/entries/import-from-table`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1518,12 +1516,12 @@ export default function ProjectsManagement() {
 
     const loadOrgDataTimes = async (projectId: string) => {
         try {
-            const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/datatimes?projectId=${projectId}`);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes/datatimes?projectId=${projectId}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             setOrgDataTimes(data || []);
             // 同时获取当前激活的快照
-            const activeResp = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/active-data-dt?projectId=${projectId}`);
+            const activeResp = await fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes/active-data-dt?projectId=${projectId}`);
             if (activeResp.ok) {
                 const activeData = await activeResp.json();
                 setOrgActiveDataDt(activeData.activeDataDt || '');
@@ -1542,7 +1540,7 @@ export default function ProjectsManagement() {
         try {
             const params = new URLSearchParams({ projectId: contentManagementProject._id });
             if (dataDt) params.append('dataDt', dataDt);
-            const response = await fetch(`${DAT_API_BASE}/api/v1/org/nodes/activate-data-dt?${params}`, {
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes/activate-data-dt?${params}`, {
                 method: 'PUT',
             });
             const body = await response.json().catch(() => null);

@@ -6,8 +6,6 @@ import { getDatApiBaseUrl } from '~/utils/datApi';
 import * as Ariakit from '@ariakit/react';
 import { RefreshCw, User as UserIcon, Mail, Calendar, Download, Eye, X, List, Grid, Settings, Shield, User, Trash2, Network, Pencil } from 'lucide-react';
 
-const DAT_API_BASE = getDatApiBaseUrl();
-
 interface User {
   _id: string;
   email: string;
@@ -543,7 +541,7 @@ export default function UsersManagement() {
       return;
     }
     setOrgLoading(true);
-    fetch(`${DAT_API_BASE}/api/v1/org/nodes?projectId=${orgProjectId}`)
+    fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes?projectId=${orgProjectId}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((tree) => setOrgOptions(flattenOrgTree(tree)))
       .catch((err) => {

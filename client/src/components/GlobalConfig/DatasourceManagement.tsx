@@ -33,8 +33,6 @@ import {
   Star,
 } from "lucide-react";
 
-const DAT_API_BASE = getDatApiBaseUrl();
-
 interface DatProject {
   _id: string;
   name: string;
@@ -305,7 +303,7 @@ export default function DatasourceManagement() {
 
   const fetchGlobalConfig = useCallback(async () => {
     try {
-      const response = await fetch(`${DAT_API_BASE}/api/v1/config/global`);
+      const response = await fetch(`${getDatApiBaseUrl()}/api/v1/config/global`);
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || "获取默认配置失败");
@@ -360,7 +358,7 @@ export default function DatasourceManagement() {
       try {
         setIsLoadingSchema(true);
         const response = await fetch(
-          `${DAT_API_BASE}/api/v1/content-store/light-schema/list?projectId=${projectId}&datasourceId=${datasourceId}`,
+          `${getDatApiBaseUrl()}/api/v1/content-store/light-schema/list?projectId=${projectId}&datasourceId=${datasourceId}`,
         );
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -386,7 +384,7 @@ export default function DatasourceManagement() {
       if (!viewingDatasource?.projectId) return;
       setTableSelectLoading(true);
       try {
-        let url = `${DAT_API_BASE}/api/v1/content-store/datasource/tables?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`;
+        let url = `${getDatApiBaseUrl()}/api/v1/content-store/datasource/tables?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`;
         if (schemaArg) {
           url += `&schema=${encodeURIComponent(schemaArg)}`;
         }
@@ -445,7 +443,7 @@ export default function DatasourceManagement() {
 
       try {
         const schemasRes = await fetch(
-          `${DAT_API_BASE}/api/v1/content-store/datasource/schemas?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`
+          `${getDatApiBaseUrl()}/api/v1/content-store/datasource/schemas?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`
         );
         if (!schemasRes.ok) {
           throw new Error(`获取 Schema 列表失败 status: ${schemasRes.status}`);
@@ -456,7 +454,7 @@ export default function DatasourceManagement() {
         if (mode === "cells") {
           try {
             const cellTabsRes = await fetch(
-              `${DAT_API_BASE}/api/v1/content-store/cells/tables?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`
+              `${getDatApiBaseUrl()}/api/v1/content-store/cells/tables?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`
             );
             if (cellTabsRes.ok) {
               const cellTabs: string[] = await cellTabsRes.json();
@@ -520,7 +518,7 @@ export default function DatasourceManagement() {
     try {
       if (tableSelectMode === "schema") {
         const response = await fetch(
-          `${DAT_API_BASE}/api/v1/content-store/light-schema/generate?projectId=${projectId}&datasourceId=${datasourceId}`,
+          `${getDatApiBaseUrl()}/api/v1/content-store/light-schema/generate?projectId=${projectId}&datasourceId=${datasourceId}`,
           {
             method: "POST",
             headers: {
@@ -545,7 +543,7 @@ export default function DatasourceManagement() {
         await fetchLightSchemas(projectId, datasourceId);
       } else {
         const response = await fetch(
-          `${DAT_API_BASE}/api/v1/content-store/cells/vectorize?projectId=${projectId}&datasourceId=${datasourceId}`,
+          `${getDatApiBaseUrl()}/api/v1/content-store/cells/vectorize?projectId=${projectId}&datasourceId=${datasourceId}`,
           {
             method: "POST",
             headers: {
@@ -592,7 +590,7 @@ export default function DatasourceManagement() {
 
     try {
       const response = await fetch(
-        `${DAT_API_BASE}/api/v1/content-store/preprocessing/clear?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`,
+        `${getDatApiBaseUrl()}/api/v1/content-store/preprocessing/clear?projectId=${viewingDatasource.projectId}&datasourceId=${viewingDatasource._id}`,
         { method: "DELETE" },
       );
       if (!response.ok) {
@@ -889,7 +887,7 @@ export default function DatasourceManagement() {
 
       setIsSettingDefaultId(datasource._id);
       try {
-        const response = await fetch(`${DAT_API_BASE}/api/v1/config/global`, {
+        const response = await fetch(`${getDatApiBaseUrl()}/api/v1/config/global`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
