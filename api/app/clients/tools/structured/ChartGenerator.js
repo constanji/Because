@@ -3,6 +3,84 @@ const { z } = require("zod");
 const { logger } = require("@because/data-schemas");
 
 /**
+ * 鲁棒地把模型输出解析为对象。
+ * 兼容：多层 JSON.stringify、markdown ```json 代码块包裹、前后空白。
+ * 无法解析时返回 undefined。
+ */
+function robustParse(value) {
+  let v = value;
+  for (let i = 0; i < 3 && typeof v === "string"; i++) {
+    let s = v.trim();
+    if (!s) {
+      return undefined;
+    }
+    const fence = s.match(/^```(?:json|javascript|js)?\s*([\s\S]*?)\s*```$/i);
+    if (fence) {
+      s = fence[1].trim();
+    }
+    try {
+      v = JSON.parse(s);
+    } catch (_err) {
+      return undefined;
+    }
+  }
+  return v;
+}
+
+/**
+ * 将模型可能返回的各种 input 形态归一化为 {title, g2Spec, analysisType}。
+ * 兼容：整体被 stringify、被再包一层 {charts:[{...}]}、把 spec 平铺在顶层等。
+ * 无法识别时原样返回，交由 zod 报错。
+ */
+function coerceChartInput(value) {
+  let v = value;
+
+  if (typeof v === "string") {
+    const parsed = robustParse(v);
+    if (parsed !== undefined) {
+      v = parsed;
+    }
+  }
+
+  if (!v || typeof v !== "object" || Array.isArray(v)) {
+    if (Array.isArray(v) && v.length > 0) {
+      v = v[0];
+    } else {
+      return value;
+    }
+  }
+
+  // 被包了一层 {charts:[{...}]}
+  if ("charts" in v && !("g2Spec" in v)) {
+    let charts = v.charts;
+    if (typeof charts === "string") {
+      const parsed = robustParse(charts);
+      if (parsed !== undefined) {
+        charts = parsed;
+      }
+    }
+    if (Array.isArray(charts) && charts.length > 0) {
+      return { ...charts[0] };
+    }
+    if (charts && typeof charts === "object") {
+      return { ...charts };
+    }
+  }
+
+  // 兼容误用 echartsOption 字段名
+  if (!("g2Spec" in v) && "echartsOption" in v) {
+    return { title: v.title || "图表", g2Spec: v.echartsOption };
+  }
+
+  // 模型把 spec 平铺在顶层（有 type 但没有 g2Spec 包裹）
+  if (!("g2Spec" in v) && "type" in v) {
+    return { title: v.title || "图表", g2Spec: v };
+  }
+
+  return v;
+}
+
+/**
  * ChartGenerator Tool - 灵活 G2 图表生成工具
  *
  * 接收 LLM 生成的 G2 Spec JSON 配置，验证后返回配置供前端 G2Chart 组件渲染。
@@ -46,38 +124,41 @@ class ChartGenerator extends Tool {
     "- 🚫 严禁 emoji\n" +
     "- 标题具业务洞察力";
 
-  schema = z.object({
-    title: z
-      .string()
-      .describe(
-        '图表标题，需具备业务洞察力，如"二线城市是本月销售下滑的重灾区"而非"各地区销售数据"',
-      ),
-    g2Spec: z
-      .union([z.string(), z.record(z.any())])
-      .describe(
-        "完整的 G2 Spec JSON 配置（可以是 JSON 字符串或对象）。" +
-          "必须包含 type（mark 类型如 interval/line/point/area/cell/boxplot 或 view）和 data（数据数组）。" +
-          "支持的关键字段：type, data, encode(x/y/color/size/series/shape), transform(stackY/dodgeX/flexX/normalizeY/sortX/groupX/binX), " +
-          "coordinate(transpose/polar/theta), scale, axis, legend, label, style, interaction, children(多层 mark 复合图表)。" +
-          '对于复合图表（如柱线混合双轴图），使用 type:"view" + children 数组组合多个 mark。' +
-          "参考 G2 Spec 标准格式。",
-      ),
-    analysisType: z
-      .enum([
-        "dimension_compare",
-        "trend_analysis",
-        "combined_analysis",
-        "composition_distribution",
-        "general",
-      ])
-      .optional()
-      .describe(
-        "归因分析场景类型（可选）：" +
-          "dimension_compare=多维度对比分析, trend_analysis=同比/环比趋势分析, " +
-          "combined_analysis=多维度+时间轴组合归因, composition_distribution=指标构成/分布归因, " +
-          "general=通用图表",
-      ),
-  });
+  schema = z.preprocess(
+    coerceChartInput,
+    z.object({
+      title: z
+        .string()
+        .describe(
+          '图表标题，需具备业务洞察力，如"二线城市是本月销售下滑的重灾区"而非"各地区销售数据"',
+        ),
+      g2Spec: z
+        .union([z.string(), z.record(z.any())])
+        .describe(
+          "完整的 G2 Spec JSON 配置（可以是 JSON 字符串或对象）。" +
+            "必须包含 type（mark 类型如 interval/line/point/area/cell/boxplot 或 view）和 data（数据数组）。" +
+            "支持的关键字段：type, data, encode(x/y/color/size/series/shape), transform(stackY/dodgeX/flexX/normalizeY/sortX/groupX/binX), " +
+            "coordinate(transpose/polar/theta), scale, axis, legend, label, style, interaction, children(多层 mark 复合图表)。" +
+            '对于复合图表（如柱线混合双轴图），使用 type:"view" + children 数组组合多个 mark。' +
+            "参考 G2 Spec 标准格式。",
+        ),
+      analysisType: z
+        .enum([
+          "dimension_compare",
+          "trend_analysis",
+          "combined_analysis",
+          "composition_distribution",
+          "general",
+        ])
+        .optional()
+        .describe(
+          "归因分析场景类型（可选）：" +
+            "dimension_compare=多维度对比分析, trend_analysis=同比/环比趋势分析, " +
+            "combined_analysis=多维度+时间轴组合归因, composition_distribution=指标构成/分布归因, " +
+            "general=通用图表",
+        ),
+    }),
+  );
 
   constructor(fields = {}) {
     super();

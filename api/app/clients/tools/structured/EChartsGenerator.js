@@ -3,6 +3,82 @@ const { z } = require("zod");
 const { logger } = require("@because/data-schemas");
 
 /**
+ * 鲁棒地把模型输出解析为对象。
+ * 兼容：多层 JSON.stringify、markdown ```json 代码块包裹、前后空白。
+ * 无法解析时返回 undefined。
+ */
+function robustParse(value) {
+  let v = value;
+  for (let i = 0; i < 3 && typeof v === "string"; i++) {
+    let s = v.trim();
+    if (!s) {
+      return undefined;
+    }
+    // 去除 markdown 代码块围栏
+    const fence = s.match(/^```(?:json|javascript|js)?\s*([\s\S]*?)\s*```$/i);
+    if (fence) {
+      s = fence[1].trim();
+    }
+    try {
+      v = JSON.parse(s);
+    } catch (_err) {
+      return undefined;
+    }
+  }
+  return v;
+}
+
+/**
+ * 将模型可能返回的各种 input 形态归一化为 {title, echartsOption, analysisType}。
+ * 兼容：整体被 stringify、被再包一层 {charts:[{...}]}、直接把 option 平铺在顶层等。
+ * 无法识别时原样返回，交由 zod 报错。
+ */
+function coerceEChartsInput(value) {
+  let v = value;
+
+  // 整体是字符串 → 解析
+  if (typeof v === "string") {
+    const parsed = robustParse(v);
+    if (parsed !== undefined) {
+      v = parsed;
+    }
+  }
+
+  if (!v || typeof v !== "object" || Array.isArray(v)) {
+    // 顶层是数组（charts 数组误传）→ 取第一个
+    if (Array.isArray(v) && v.length > 0) {
+      v = v[0];
+    } else {
+      return value;
+    }
+  }
+
+  // 被包了一层 {charts:[{...}]}
+  if ("charts" in v && !("echartsOption" in v)) {
+    let charts = v.charts;
+    if (typeof charts === "string") {
+      const parsed = robustParse(charts);
+      if (parsed !== undefined) {
+        charts = parsed;
+      }
+    }
+    if (Array.isArray(charts) && charts.length > 0) {
+      return { ...charts[0] };
+    }
+    if (charts && typeof charts === "object") {
+      return { ...charts };
+    }
+  }
+
+  // 模型把 option 内容平铺在顶层（有 series 但没有 echartsOption 包裹）
+  if (!("echartsOption" in v) && "series" in v) {
+    return { title: v.title || "图表", echartsOption: v };
+  }
+
+  return v;
+}
+
+/**
  * EChartsGenerator Tool - ECharts 图表生成工具
  *
  * 接收 LLM 生成的 ECharts Option JSON 配置，验证后返回配置供前端 EChartsChart 组件渲染。
@@ -50,41 +126,44 @@ class EChartsGenerator extends Tool {
     "- series 中每个系列的 type 指定图表类型\n" +
     "- 参考标准格式：https://echarts.apache.org/zh/option.html";
 
-  schema = z.object({
-    title: z
-      .string()
-      .describe(
-        '图表标题，需具备业务洞察力，如"二线城市是本月销售下滑的重灾区"而非"各地区销售数据"',
-      ),
-    echartsOption: z
-      .union([z.string(), z.record(z.any())])
-      .describe(
-        "完整的 ECharts Option JSON 配置（可以是 JSON 字符串或对象）。" +
-          "必须包含 series（系列数据数组）以及对应的 xAxis/yAxis 或其它坐标系配置。" +
-          "支持的关键字段：title, tooltip, legend, xAxis, yAxis, series, grid, " +
-          "dataZoom（数据区域缩放）, visualMap（视觉映射）, toolbox（工具栏）, " +
-          "dataset（数据集，ECharts 4+ 支持）, color（调色板）, " +
-          "tooltip（提示框）, legend（图例）, graphic（原生图形组件）。" +
-          "series 中每个系列的 type 指定图表类型（bar/line/pie/scatter/effectScatter/radar/" +
-          "treemap/heatmap/boxplot/candlestick/gauge/funnel/sankey/sunburst/map/lines/graph/parallel 等）。" +
-          "参考 ECharts Option 标准格式（https://echarts.apache.org/zh/option.html）。",
-      ),
-    analysisType: z
-      .enum([
-        "dimension_compare",
-        "trend_analysis",
-        "combined_analysis",
-        "composition_distribution",
-        "general",
-      ])
-      .optional()
-      .describe(
-        "归因分析场景类型（可选）：" +
-          "dimension_compare=多维度对比分析, trend_analysis=同比/环比趋势分析, " +
-          "combined_analysis=多维度+时间轴组合归因, composition_distribution=指标构成/分布归因, " +
-          "general=通用图表",
-      ),
-  });
+  schema = z.preprocess(
+    coerceEChartsInput,
+    z.object({
+      title: z
+        .string()
+        .describe(
+          '图表标题，需具备业务洞察力，如"二线城市是本月销售下滑的重灾区"而非"各地区销售数据"',
+        ),
+      echartsOption: z
+        .union([z.string(), z.record(z.any())])
+        .describe(
+          "完整的 ECharts Option JSON 配置（可以是 JSON 字符串或对象）。" +
+            "必须包含 series（系列数据数组）以及对应的 xAxis/yAxis 或其它坐标系配置。" +
+            "支持的关键字段：title, tooltip, legend, xAxis, yAxis, series, grid, " +
+            "dataZoom（数据区域缩放）, visualMap（视觉映射）, toolbox（工具栏）, " +
+            "dataset（数据集，ECharts 4+ 支持）, color（调色板）, " +
+            "tooltip（提示框）, legend（图例）, graphic（原生图形组件）。" +
+            "series 中每个系列的 type 指定图表类型（bar/line/pie/scatter/effectScatter/radar/" +
+            "treemap/heatmap/boxplot/candlestick/gauge/funnel/sankey/sunburst/map/lines/graph/parallel 等）。" +
+            "参考 ECharts Option 标准格式（https://echarts.apache.org/zh/option.html）。",
+        ),
+      analysisType: z
+        .enum([
+          "dimension_compare",
+          "trend_analysis",
+          "combined_analysis",
+          "composition_distribution",
+          "general",
+        ])
+        .optional()
+        .describe(
+          "归因分析场景类型（可选）：" +
+            "dimension_compare=多维度对比分析, trend_analysis=同比/环比趋势分析, " +
+            "combined_analysis=多维度+时间轴组合归因, composition_distribution=指标构成/分布归因, " +
+            "general=通用图表",
+        ),
+    }),
+  );
 
   constructor(fields = {}) {
     super();
