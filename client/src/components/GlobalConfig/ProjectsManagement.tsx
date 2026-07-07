@@ -3213,6 +3213,237 @@ export default function ProjectsManagement() {
                 </div>
             )}
 
+            {/* Org Table Import Modal (从数据源表导入机构信息) */}
+            {orgTableImportModalVisible && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-2xl rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <h3 className="text-lg font-semibold text-text-primary">从数据源表导入机构信息</h3>
+                            <button
+                                onClick={() => {
+                                    setOrgTableImportModalVisible(false);
+                                    setOrgTableImportResult(null);
+                                }}
+                                className="rounded p-1 text-text-secondary hover:bg-surface-hover"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Steps indicator */}
+                        <div className="flex items-center border-b border-border-light px-4 py-3">
+                            {[
+                                { key: 'datasource', label: '选择数据源', step: 0 },
+                                { key: 'table', label: '选择表并校验', step: 1 },
+                                { key: 'result', label: '导入完成', step: 2 },
+                            ].map((s) => {
+                                const currentStep =
+                                    orgTableImportStep === 'datasource' ? 0 : orgTableImportStep === 'table' ? 1 : 2;
+                                return (
+                                    <div key={s.key} className="flex items-center">
+                                        <div
+                                            className={cn(
+                                                'flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium',
+                                                s.step < currentStep
+                                                    ? 'bg-green-500 text-white'
+                                                    : s.step === currentStep
+                                                        ? 'bg-blue-500 text-white'
+                                                        : 'bg-gray-200 text-gray-500 dark:bg-gray-700'
+                                            )}
+                                        >
+                                            {s.step < currentStep ? '✓' : s.step + 1}
+                                        </div>
+                                        <span
+                                            className={cn(
+                                                'ml-2 text-xs',
+                                                s.step === currentStep ? 'font-medium text-text-primary' : 'text-text-tertiary'
+                                            )}
+                                        >
+                                            {s.label}
+                                        </span>
+                                        {s.step < 2 && <div className="mx-2 h-px w-8 bg-border-light" />}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Step 1: 选择数据源 */}
+                        {orgTableImportStep === 'datasource' && (
+                            <div className="p-4 space-y-3">
+                                <select
+                                    value={orgTableImportSelectedDs}
+                                    onChange={(e) => onOrgTableImportDsChange(e.target.value)}
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="">请选择数据源</option>
+                                    {orgTableImportDatasources.map((ds: any) => (
+                                        <option key={ds.id} value={ds.id}>
+                                            {ds.name} ({ds.provider})
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="text-right">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrgTableImportStep('table')}
+                                        disabled={
+                                            !orgTableImportSelectedDs ||
+                                            orgTableImportLoading ||
+                                            (orgTableImportSchemas.length <= 1 && orgTableImportTables.length === 0)
+                                        }
+                                        className="btn btn-primary text-sm px-3 py-1.5 disabled:opacity-50"
+                                    >
+                                        下一步
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 2: 选择表并校验 */}
+                        {orgTableImportStep === 'table' && (
+                            <div className="p-4 space-y-3">
+                                {orgTableImportLoading ? (
+                                    <div className="flex items-center justify-center py-8 text-sm text-text-secondary">
+                                        正在加载...
+                                    </div>
+                                ) : (
+                                    <>
+                                        {orgTableImportSchemas.length > 1 && (
+                                            <div className="space-y-1.5">
+                                                <label className="block text-sm font-medium text-text-secondary">
+                                                    数据库 Schema
+                                                </label>
+                                                <select
+                                                    value={orgTableImportSelectedSchema || ''}
+                                                    onChange={(e) => onOrgTableImportSchemaChange(e.target.value)}
+                                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                >
+                                                    <option value="">请选择 Schema</option>
+                                                    {orgTableImportSchemas.map((schema) => (
+                                                        <option key={schema} value={schema}>
+                                                            {schema}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                        <select
+                                            value={orgTableImportSelectedTable}
+                                            onChange={(e) => onOrgTableImportTableChange(e.target.value)}
+                                            disabled={orgTableImportSchemas.length > 1 && !orgTableImportSelectedSchema}
+                                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white disabled:opacity-60"
+                                        >
+                                            <option value="">请选择表（如 c_par_brch_level）</option>
+                                            {orgTableImportTables.map((t) => (
+                                                <option key={t} value={t}>
+                                                    {t}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </>
+                                )}
+
+                                {/* Schema 校验结果 */}
+                                {orgTableImportColumns && (
+                                    <div>
+                                        <div
+                                            className={cn(
+                                                'rounded-md p-3 text-sm',
+                                                orgTableImportColumns.valid
+                                                    ? 'border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400'
+                                                    : 'border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
+                                            )}
+                                        >
+                                            <p className="font-medium">
+                                                {orgTableImportColumns.valid ? 'Schema 校验通过' : 'Schema 校验失败'}
+                                            </p>
+                                            <p className="mt-1 text-xs opacity-80">{orgTableImportColumns.message}</p>
+                                        </div>
+                                        <p className="mt-1 text-xs text-text-tertiary">
+                                            必填列: data_dt / brchno / brchna / brchup / brchlv
+                                        </p>
+                                        {orgTableImportColumns.columns.length > 0 && (
+                                            <div className="mt-2 flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                                                {orgTableImportColumns.columns.map((c) => (
+                                                    <span
+                                                        key={c.name}
+                                                        className="inline-flex items-center rounded bg-surface-secondary px-2 py-0.5 text-xs text-text-secondary"
+                                                    >
+                                                        {c.name} <span className="ml-1 text-text-tertiary">({c.type})</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrgTableImportStep('datasource')}
+                                        className="btn btn-neutral text-sm px-3 py-1.5"
+                                    >
+                                        上一步
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleOrgImportFromTable}
+                                        disabled={!orgTableImportColumns?.valid || orgTableImportLoading}
+                                        className="btn btn-primary text-sm px-3 py-1.5 disabled:opacity-50"
+                                    >
+                                        {orgTableImportLoading ? '导入中...' : '开始导入'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 3: 导入结果 */}
+                        {orgTableImportStep === 'result' && orgTableImportResult && (
+                            <div className="p-4 space-y-4">
+                                <div className="flex flex-col items-center py-3">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
+                                        <svg
+                                            className="h-6 w-6 text-green-500"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
+                                    </div>
+                                    <p className="mt-2 text-sm font-medium text-text-primary">导入成功</p>
+                                    <p className="text-xs text-text-tertiary">从数据源表成功导入机构信息</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 rounded-md border border-border-light bg-surface-secondary/40 p-3 text-sm">
+                                    <div>
+                                        <span className="text-text-tertiary">导入节点数：</span>
+                                        <span className="font-semibold text-green-500">{orgTableImportResult.imported}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-text-tertiary">数据日期 (dataDt)：</span>
+                                        <span className="font-mono text-text-primary">{orgTableImportResult.dataDt}</span>
+                                    </div>
+                                </div>
+                                <div className="text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrgTableImportModalVisible(false)}
+                                        className="btn btn-primary text-sm px-4 py-1.5"
+                                    >
+                                        关闭
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }
