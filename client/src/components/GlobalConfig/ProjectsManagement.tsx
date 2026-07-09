@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Button, useToastContext } from '@because/client';
+import { Button, useToastContext, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@because/client';
 import { useAuthContext } from '~/hooks';
 import { cn } from '~/utils';
 import { getDatApiBaseUrl } from '~/utils/datApi';
@@ -33,22 +33,33 @@ import McpServersConfig from './components/McpServersConfig';
 
 interface OrgTreeNode {
     key: string;
-    title: string;
+    orgCode: string;
+    orgName: string;
+    brchLv: number | null;
     dataScope: string;
+    managementOrg?: string | null;
     children: OrgTreeNode[];
 }
 
-const SCOPE_LABELS: Record<string, { label: string; color: string }> = {
-    ALL: { label: '全部', color: 'bg-green-500/15 text-green-400 ring-green-500/20' },
-    SELF_AND_DESCENDANTS: { label: '本级及下级', color: 'bg-blue-500/15 text-blue-400 ring-blue-500/20' },
-    SELF: { label: '仅本级', color: 'bg-orange-500/15 text-orange-400 ring-orange-500/20' },
-};
+const BRCH_LV_OPTIONS: { value: number; label: string }[] = [
+    { value: 1, label: '1 全行（查所有）' },
+    { value: 2, label: '2 本级+下级' },
+    { value: 3, label: '3 管理行本级+下级' },
+    { value: 4, label: '4 仅本级' },
+];
 
-// 单个树节点：自带展开/折叠
-function OrgTreeNodeView({ node, depth }: { node: OrgTreeNode; depth: number }) {
+// 单个树节点：自带展开/折叠 + brchLv 数据权限级别编辑
+function OrgTreeNodeView({
+    node,
+    depth,
+    onUpdateBrchLv,
+}: {
+    node: OrgTreeNode;
+    depth: number;
+    onUpdateBrchLv?: (node: OrgTreeNode, newLv: number) => void;
+}) {
     const [expanded, setExpanded] = useState(depth < 2); // 默认展开前两层
     const hasChildren = node.children && node.children.length > 0;
-    const scope = SCOPE_LABELS[node.dataScope] || { label: node.dataScope || 'SELF', color: 'bg-gray-500/15 text-gray-400 ring-gray-500/20' };
 
     return (
         <li>
@@ -68,15 +79,44 @@ function OrgTreeNodeView({ node, depth }: { node: OrgTreeNode; depth: number }) 
                 ) : (
                     <span className="w-3 shrink-0" />
                 )}
-                <span className="text-text-primary text-xs">{node.title}</span>
-                <span className={cn('inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-medium ring-1 ring-inset', scope.color)}>
-                    {scope.label}
-                </span>
+                <span className="text-text-primary text-xs">{node.orgCode} {node.orgName}</span>
+                {onUpdateBrchLv && (
+                    <Select
+                        value={node.brchLv != null ? String(node.brchLv) : undefined}
+                        onValueChange={(v) => onUpdateBrchLv(node, Number(v))}
+                    >
+                        <SelectTrigger
+                            className={cn(
+                                'h-6 w-[170px] text-xs',
+                                'border border-gray-300 bg-white text-gray-900',
+                                'dark:border-gray-600 dark:bg-gray-700 dark:text-white'
+                            )}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <SelectValue placeholder="未设置" />
+                        </SelectTrigger>
+                        <SelectContent
+                            className="border border-gray-300 bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {BRCH_LV_OPTIONS.map((opt) => (
+                                <SelectItem key={opt.value} value={String(opt.value)}>
+                                    {opt.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
             </div>
             {hasChildren && expanded && (
                 <ul className="border-l border-border-light pl-3 ml-1.5 space-y-0.5">
                     {node.children.map((child) => (
-                        <OrgTreeNodeView key={child.key} node={child} depth={depth + 1} />
+                        <OrgTreeNodeView
+                            key={child.key}
+                            node={child}
+                            depth={depth + 1}
+                            onUpdateBrchLv={onUpdateBrchLv}
+                        />
                     ))}
                 </ul>
             )}
@@ -85,11 +125,17 @@ function OrgTreeNodeView({ node, depth }: { node: OrgTreeNode; depth: number }) 
 }
 
 // 树视图容器
-function OrgTreeView({ nodes }: { nodes: OrgTreeNode[] }) {
+function OrgTreeView({
+    nodes,
+    onUpdateBrchLv,
+}: {
+    nodes: OrgTreeNode[];
+    onUpdateBrchLv?: (node: OrgTreeNode, newLv: number) => void;
+}) {
     return (
         <ul className="space-y-0.5">
             {nodes.map((n) => (
-                <OrgTreeNodeView key={n.key} node={n} depth={0} />
+                <OrgTreeNodeView key={n.key} node={n} depth={0} onUpdateBrchLv={onUpdateBrchLv} />
             ))}
         </ul>
     );
@@ -240,6 +286,8 @@ const getDefaultProject = (): Omit<
         configuration: {
             "max-results": 5,
             "min-score": 0.6,
+            "synonym.retrieval.max-results": 8,
+            "synonym.retrieval.min-score": 0.4,
         },
     },
     reranking: {
@@ -1172,8 +1220,11 @@ export default function ProjectsManagement() {
 
     const toTreeNode = (node: any): OrgTreeNode => ({
         key: node.orgCode,
-        title: `${node.orgCode}  ${node.orgName || ''}`,
+        orgCode: node.orgCode,
+        orgName: node.orgName || '',
+        brchLv: node.brchLv ?? null,
         dataScope: node.dataScope || 'SELF',
+        managementOrg: node.managementOrg ?? null,
         children: (node.children || []).map(toTreeNode),
     });
 
@@ -1207,6 +1258,37 @@ export default function ProjectsManagement() {
             await loadOrgDataTimes(contentManagementProject._id);
         } catch (error) {
             showToast({ message: `清空失败: ${error instanceof Error ? error.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    // 修改单个机构的数据权限级别
+    const handleUpdateBrchLv = async (node: OrgTreeNode, newLv: number) => {
+        if (!contentManagementProject) return;
+        if (node.brchLv === newLv) return;
+        try {
+            const params = new URLSearchParams({
+                projectId: contentManagementProject._id,
+                orgCode: node.orgCode,
+                brchLv: String(newLv),
+            });
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes/brch-lv?${params}`, {
+                method: 'PUT',
+            });
+            const body = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(body?.message || `HTTP ${response.status}`);
+            }
+            const lvLabel = BRCH_LV_OPTIONS.find((o) => o.value === newLv)?.label ?? String(newLv);
+            showToast({
+                message: `${node.orgCode} 数据权限已更新为 ${lvLabel}`,
+                status: 'success',
+            });
+            await loadOrgNodes(contentManagementProject._id);
+        } catch (e) {
+            showToast({
+                message: `修改失败: ${e instanceof Error ? e.message : '未知错误'}`,
+                status: 'error',
+            });
         }
     };
 
@@ -2689,7 +2771,7 @@ export default function ProjectsManagement() {
                                         </div>
                                     ) : orgNodesTree.length > 0 ? (
                                         <div className="max-h-[400px] overflow-auto text-sm">
-                                            <OrgTreeView nodes={orgNodesTree} />
+                                            <OrgTreeView nodes={orgNodesTree} onUpdateBrchLv={handleUpdateBrchLv} />
                                         </div>
                                     ) : (
                                         <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
