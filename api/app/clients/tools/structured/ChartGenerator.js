@@ -89,9 +89,13 @@ class ChartGenerator extends Tool {
   name = "chart_generator";
 
   description =
-    "G2 图表生成工具。传入 title + g2Spec 生成图表。\n\n" +
+    "G2 图表生成工具。传入 title + g2Spec 生成图表。支持 bar（柱状图）、line（折线图）、pie（饼图）三种类型。\n\n" +
+    "## 图表类型选型\n" +
+    "- 多机构(≥2个brchna不同值) + 多指标列对比 → bar（分组柱状图，interval type）\n" +
+    "- 单指标时间趋势（≥3个时间点）→ line（折线图，line type）\n" +
+    "- 多机构占比（仅一个指标值）→ pie（饼图，interval + theta coordinate）\n\n" +
     "## g2Spec 格式（唯一合法格式，只能替换 <> 占位符）\n\n" +
-    "### 条件 A（多行多维度对比 → 柱状图）\n" +
+    "### 条件 A（多行多维度对比 → bar 柱状图）\n" +
     "```json\n" +
     '{"type":"view","data":[\n' +
     '  {"<维度中文名>":"<rows[0].维度值>","<指标中文名>":<rows[0].index_value>},\n' +
@@ -101,28 +105,43 @@ class ChartGenerator extends Tool {
     '"axis":{"x":{"title":"<维度含义>"},"y":{"title":"<指标中文名>（万元）"}}}\n' +
     "```\n" +
     "- data 逐行取自 rows，有几行取几行，数值 = 原始万元值\n\n" +
-    "### 条件 B（单行时间对比 → 柱状图）\n" +
-    "将 index_value/yd_value/m_begin_value 等 reshape 为 {对比类型, 数值}：\n" +
+    "### 条件 B（单行时间对比 → line 折线图）\n" +
+    "将 index_value/yd_value/m_begin_value 等 reshape，每条数据必须带一个相同值的\"系列\"字段：\n" +
     "```json\n" +
     '{"type":"view","data":[\n' +
-    '  {"对比类型":"上日","数值":<rows[0].yd_value>},\n' +
-    '  {"对比类型":"上月末","数值":<rows[0].m_begin_value>},\n' +
-    '  {"对比类型":"上季末","数值":<rows[0].q_begin_value>},\n' +
-    '  {"对比类型":"上年末","数值":<rows[0].y_begin_value>},\n' +
-    '  {"对比类型":"上年同期","数值":<rows[0].ly_value>},\n' +
-    '  {"对比类型":"当前","数值":<rows[0].index_value>}\n' +
-    '],"children":[{"type":"interval","encode":{"x":"对比类型","y":"数值","color":"对比类型"}}],\n' +
+    '  {"对比类型":"上日","数值":<rows[0].yd_value>,"系列":"<index_name>"},\n' +
+    '  {"对比类型":"上月末","数值":<rows[0].m_begin_value>,"系列":"<index_name>"},\n' +
+    '  {"对比类型":"上季末","数值":<rows[0].q_begin_value>,"系列":"<index_name>"},\n' +
+    '  {"对比类型":"上年末","数值":<rows[0].y_begin_value>,"系列":"<index_name>"},\n' +
+    '  {"对比类型":"上年同期","数值":<rows[0].ly_value>,"系列":"<index_name>"},\n' +
+    '  {"对比类型":"当前","数值":<rows[0].index_value>,"系列":"<index_name>"}\n' +
+    '],"children":[{"type":"line","encode":{"x":"对比类型","y":"数值","color":"系列"}}],\n' +
     '"scale":{"y":{"nice":true}},\n' +
-    '"axis":{"x":{"title":"时间对比"},"y":{"title":"<rows[0].index_name>（万元）"}}}\n' +
+    '"axis":{"x":{"title":"时间对比"},"y":{"title":"<index_name>（万元）"}}}\n' +
     "```\n" +
-    "- data 只含非 null 字段条目（≥2 条即可），数值 = 原始万元值\n\n" +
+    "- data 只含非 null 字段条目（≥2 条即可），数值 = 原始万元值\n" +
+    '- 🔴 "系列"字段每条数据值必须相同（都用同一个 index_name），否则color会拆成多个系列导致线断开\n' +
+    "- type 用 \"line\" 而非 \"interval\"，适合趋势展示\n\n" +
+    "### 条件 C（多行占比分析 → pie 饼图）\n" +
+    "```json\n" +
+    '{"type":"view","data":[\n' +
+    '  {"<维度中文名>":"<rows[0].维度值>","<指标中文名>":<rows[0].index_value>},\n' +
+    '  {"<维度中文名>":"<rows[1].维度值>","<指标中文名>":<rows[1].index_value>}\n' +
+    '],"children":[{"type":"interval","encode":{"y":"<指标中文名>","color":"<维度中文名>"},' +
+    '"transform":[{"type":"stackY"}],' +
+    '"coordinate":{"type":"theta"}}],' +
+    '"legend":{"color":{}}}\n' +
+    "```\n" +
+    "- data 逐行取自 rows，数值 = 原始万元值\n" +
+    "- 饼图核心：coordinate type=theta + transform stackY\n\n" +
     "### 🔴 规则\n" +
     "- 只能替换 <> 占位符，禁止新增/删除/修改任何字段名/结构\n" +
     "- encode 的 value 用字符串简写（如 \"x\":\"对比类型\"），禁止用对象包裹（禁止 {\"field\":\"...\",\"type\":\"nominal\"}）\n" +
     "- 禁止改 y 轴标题中的\"（万元）\"后缀\n" +
     "- 数值 = ask_data 返回原始值，不做除法或取整\n" +
-    "- 🚫 严禁 emoji\n" +
-    "- 标题具业务洞察力";
+    "- 严禁 emoji\n" +
+    "- 标题具业务洞察力\n" +
+    "- 仅使用 bar/line/pie 三种类型，禁止 scatter/radar/gauge 等";
 
   schema = z.preprocess(
     coerceChartInput,

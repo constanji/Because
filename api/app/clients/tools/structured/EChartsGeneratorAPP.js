@@ -75,26 +75,47 @@ class EChartsGeneratorAPP extends Tool {
     "- ly_value → 日期=去年同期，类型=上年同期\n" +
     "转换后按日期升序排列。null/不存在的字段跳过。有效记录≥3条→生成趋势图。\n\n" +
     "### 3. 图表类型选型\n" +
-    "- ≥2个维度值对比 → 分组柱形图/横向条形图\n" +
-    "- ≥3个时间点序列 → 折线图/面积图\n" +
-    "- ≥3行Top N排名 → 横向条形图\n" +
-    "- 各部分占整体比例 → 饼图/环图\n" +
-    "- 绝对值+增长率 → 柱线混合双轴图\n\n" +
+    "- 多机构(≥2个brchna不同值) + 多指标列对比 → 分组柱状图(bar)\n" +
+    "- ≥3个时间点序列 / 单指标时间趋势 → 折线图(line)\n" +
+    "- 多机构(≥2行) + 仅一个指标值 → 饼图(pie)\n" +
+    "- 各部分占整体比例/占比分析 → 饼图/环图\n" +
+    "业务场景仅使用 bar、line、pie 三种类型。\n\n" +
     "### 4. 数据真实性（最高优先级，严禁违反）\n" +
     "- 图表数值必须原封不动来自 ask_data 返回结果\n" +
     "- 严禁：把合计值除以N估算、凭空编造数据行、拆分汇总行凑图\n" +
     "- 1行合计且无时间对比字段 → 不画图，告知用户\n" +
-    "- 🚫 严禁使用任何 emoji 表情符号（包括 📊📈📉🔍💡✅❌ 等）\n\n" +
-    "### 5. 字段命名与交互\n" +
+    "- 严禁使用任何 emoji 表情符号\n\n" +
+    "### 5. 样式规范 — 前端实际渲染标准（必须严格遵守，不得修改任何样式属性）\n\n" +
+    "【柱状图 bar — 多机构多指标对比】\n" +
+    '  title: { text: 业务洞察标题 }（无 left:"center"）\n' +
+    '  tooltip: { trigger: "axis", axisPointer: { type: "shadow" } }\n' +
+    '  legend: { data: [...], top: "10%" }\n' +
+    '  grid: { left: "3%", right: "4%", bottom: "3%", top: "30%", containLabel: true }\n' +
+    '  xAxis: { type: "category", data: [指标名列表] }\n' +
+    '  yAxis: { type: "value", name: "数值（单位）" }\n' +
+    '  series: 每组一个 { type: "bar", name: 机构名, data: [...], itemStyle: { color: "#色号" } }\n' +
+    "  调色板：#5470c6, #91cc75, #fac858, #ee6666, #73c0de, #3ba272\n\n" +
+    "【折线图 line — 单指标时间趋势】\n" +
+    '  title: { text: "趋势图", left: "center" }\n' +
+    '  tooltip: { trigger: "axis", confine: true }\n' +
+    '  legend: { data: [指标名], left: "right" }\n' +
+    '  grid: { left: "2%", bottom: "0%", right: "1%", containLabel: true }\n' +
+    '  xAxis: { type: "category", data: [日期数组], axisLabel: { rotate: 45 }, boundaryGap: false }\n' +
+    '  yAxis: { type: "value", name: "单位：单位名" }\n' +
+    '  series: [{ type: "line", name: "", data: [ly_value,...,index_value],\n' +
+    '            markPoint: { data: [{type:"max"},{type:"min"}] },\n' +
+    '            markLine: { data: [{type:"average"}] } }]\n\n' +
+    "【饼图 pie — 多机构占比或多指标对比】\n" +
+    '  title: { text: "标题", left: "center" }\n' +
+    '  tooltip: { trigger: "item", formatter: "{d}%" }\n' +
+    '  legend: { data: [...], left: "center", bottom: "bottom" }\n' +
+    '  series: [{ type: "pie", name: 系列名, data: [{name,value},...],\n' +
+    '            radius: "40%", center: ["50%","40%"], labelLine: { show: true } }]\n\n' +
+    "### 6. 字段命名与交互\n" +
     "- 图表数据字段名必须使用中文，禁止展示数据库原始英文字段名\n" +
     "- 标题需具备业务洞察力\n" +
     "- 必须配置 tooltip（提示框）\n" +
-    "- 推荐配置 toolbox（至少含 saveAsImage）\n" +
-    "- 数据量大时推荐 dataZoom\n\n" +
-    "### 6. ECharts Option 格式要点\n" +
-    "- 必须包含 series（系列数组）和对应坐标系（xAxis/yAxis 等）\n" +
-    "- series 中每个系列的 type 指定图表类型\n" +
-    "- 参考标准格式：https://echarts.apache.org/zh/option.html";
+    "- 数据量大时推荐 dataZoom";
 
   schema = z.object({
     charts: z
