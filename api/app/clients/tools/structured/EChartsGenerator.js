@@ -3,8 +3,75 @@ const { z } = require("zod");
 const { logger } = require("@because/data-schemas");
 
 /**
+ * 从字符串中提取 JSON 核心部分（跳过前导/后随的非 JSON 字符如 \\n）。
+ */
+function extractJsonCore(s) {
+  const firstBrace = s.search(/[\[\{]/);
+  const lastSquare = s.lastIndexOf("]");
+  const lastCurly = s.lastIndexOf("}");
+  const lastBrace = Math.max(lastSquare, lastCurly);
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return s.substring(firstBrace, lastBrace + 1);
+  }
+  return s;
+}
+
+/**
+ * 多策略 JSON 解析器：直接解析 → 修复尾部逗号 → 修复缺少引号的 key → 单引号转双引号。
+ * 覆盖 LLM 最常见的 JSON 错误，所有策略都失败时返回 undefined。
+ */
+function repairAndParseJson(jsonStr) {
+  // 策略1: 直接解析
+  try {
+    return JSON.parse(jsonStr);
+  } catch (_) {
+    /* continue */
+  }
+
+  // 策略2: 修复尾部多余逗号（,} 或 ,]）
+  try {
+    const fixed = jsonStr.replace(/,\s*([}\]])/g, "$1");
+    return JSON.parse(fixed);
+  } catch (_) {
+    /* continue */
+  }
+
+  // 策略3: 修复缺少引号的 key（含中文 key）
+  // 覆盖: {key:、{key":、,key:、,key": — 不会误伤 {"key":
+  try {
+    let fixed = jsonStr.replace(/,\s*([}\]])/g, "$1");
+    // 先修复缺开头引号: key": → "key":
+    fixed = fixed.replace(
+      /([\{,])\s*([a-zA-Z_一-鿿][\w一-鿿]*)"\s*:/g,
+      '$1"$2":',
+    );
+    // 再修复完全无引号: key:
+    fixed = fixed.replace(
+      /([\{,])\s*([a-zA-Z_一-鿿][\w一-鿿]*)\s*:/g,
+      '$1"$2":',
+    );
+    return JSON.parse(fixed);
+  } catch (_) {
+    /* continue */
+  }
+
+  // 策略4: 单引号 key/value 替换为双引号
+  try {
+    const fixed = jsonStr
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/'/g, '"');
+    return JSON.parse(fixed);
+  } catch (_) {
+    /* continue */
+  }
+
+  return undefined;
+}
+
+/**
  * 鲁棒地把模型输出解析为对象。
- * 兼容：多层 JSON.stringify、markdown ```json 代码块包裹、前后空白。
+ * 兼容：多层 JSON.stringify、markdown ```json 代码块包裹、前后空白/换行、
+ * LLM 常见 JSON 语法错误（缺少引号的 key、尾部逗号等）。
  * 无法解析时返回 undefined。
  */
 function robustParse(value) {
@@ -19,9 +86,12 @@ function robustParse(value) {
     if (fence) {
       s = fence[1].trim();
     }
-    try {
-      v = JSON.parse(s);
-    } catch (_err) {
+    // 提取 JSON 核心 + 多策略解析
+    const core = extractJsonCore(s);
+    const parsed = repairAndParseJson(core);
+    if (parsed !== undefined) {
+      v = parsed;
+    } else {
       return undefined;
     }
   }
@@ -89,63 +159,107 @@ class EChartsGenerator extends Tool {
 
   description =
     "ECharts 图表生成工具。传入 title + echartsOption 生成交互式图表嵌入聊天。\n\n" +
-    "支持类型：柱状图、折线图、面积图、饼图/环图、散点图、雷达图、热力图、漏斗图、仪表盘、瀑布图、箱线图、桑基图、旭日图、地图等。\n\n" +
-    "## 图表生成规则（强制执行，违反任何一条视为违规）\n\n" +
-    "### 1. 何时必须画图（按顺序判断，命中即执行）\n" +
-    "- 数据有 ≥2 行且存在维度字段（brchna/地区/渠道等）有 ≥2 个不同值 → 必须画图\n" +
-    "- 数据只有 1 行但包含时间对比字段（yd_value/m_begin_value/q_begin_value/y_begin_value/ly_value 任意一个非空）→ 必须画图\n" +
-    "- 数据只有 1 行且无任何时间对比字段 → 禁止画图，告知用户数据粒度不足\n\n" +
-    "### 2. 宽格式时间序列转换（1行数据含时间对比字段时必须执行，不可跳过）\n" +
-    "将时间对比字段转换为长格式，每条记录含 日期、指标值、对比类型：\n" +
+    "业务场景仅使用 bar（柱状图）、line（折线图）、pie（饼图）三种类型。\n\n" +
+    "## 图表类型选型（严格按此决策树执行）\n" +
+    "- 多机构(≥2个brchna不同值) + 多指标列对比 → 柱状图(bar)\n" +
+    "- ≥3个时间点的序列 / 单指标时间趋势 → 折线图(line)\n" +
+    "- 多机构(≥2行) + 仅一个指标值 → 饼图(pie)\n" +
+    "- 数据仅1行合计且无任何时间对比字段 → 禁止画图，告知用户数据粒度不足\n\n" +
+    "## 数据真实性（最高优先级，严禁违反）\n" +
+    "- 图表数值必须原封不动来自 ask_data 返回结果，严禁估算或编造\n" +
+    "- 严禁使用 emoji 表情符号\n" +
+    "- 所有字段名必须使用中文，禁止展示数据库原始英文字段名\n" +
+    "- 标题需具备业务洞察力\n\n" +
+    "## 宽格式时间序列转换（1行数据含时间对比字段时强制执行，不可跳过）\n" +
+    "将时间对比字段转换为长格式后按日期升序排列。null/不存在的字段跳过。有效记录≥3条→生成折线图：\n" +
     "- index_value → 日期=data_dt，类型=当前\n" +
     "- yd_value → 日期=data_dt减1天，类型=上日\n" +
     "- m_begin_value → 日期=上月末，类型=上月末\n" +
     "- q_begin_value → 日期=上季末，类型=上季末\n" +
     "- y_begin_value → 日期=上年末(12月31日)，类型=上年末\n" +
-    "- ly_value → 日期=去年同期，类型=上年同期\n" +
-    "转换后按日期升序排列。null/不存在的字段跳过。有效记录≥3条→生成趋势图。\n\n" +
-    "### 3. 图表类型选型\n" +
-    "- 多机构(≥2个brchna不同值) + 多指标列对比 → 分组柱状图(bar)\n" +
-    "- ≥3个时间点序列 / 单指标时间趋势 → 折线图(line)\n" +
-    "- 多机构(≥2行) + 仅一个指标值 → 饼图(pie)\n" +
-    "- 各部分占整体比例/占比分析 → 饼图/环图\n" +
-    "业务场景仅使用 bar、line、pie 三种类型。\n\n" +
-    "### 4. 数据真实性（最高优先级，严禁违反）\n" +
-    "- 图表数值必须原封不动来自 ask_data 返回结果\n" +
-    "- 严禁：把合计值除以N估算、凭空编造数据行、拆分汇总行凑图\n" +
-    "- 1行合计且无时间对比字段 → 不画图，告知用户\n" +
-    "- 严禁使用任何 emoji 表情符号\n\n" +
-    "### 5. 样式规范 — 前端实际渲染标准（必须严格遵守，不得修改任何样式属性）\n\n" +
-    "【柱状图 bar — 多机构多指标对比】\n" +
-    '  title: { text: 业务洞察标题 }（无 left:"center"）\n' +
-    '  tooltip: { trigger: "axis", axisPointer: { type: "shadow" } }\n' +
-    '  legend: { data: [...], top: "10%" }\n' +
-    '  grid: { left: "3%", right: "4%", bottom: "3%", top: "30%", containLabel: true }\n' +
-    '  xAxis: { type: "category", data: [指标名列表] }\n' +
-    '  yAxis: { type: "value", name: "数值（单位）" }\n' +
-    '  series: 每组一个 { type: "bar", name: 机构名, data: [...], itemStyle: { color: "#色号" } }\n' +
-    "  调色板：#5470c6, #91cc75, #fac858, #ee6666, #73c0de, #3ba272\n\n" +
-    "【折线图 line — 单指标时间趋势】\n" +
-    '  title: { text: "趋势图", left: "center" }\n' +
-    '  tooltip: { trigger: "axis", confine: true }\n' +
-    '  legend: { data: [指标名], left: "right" }\n' +
-    '  grid: { left: "2%", bottom: "0%", right: "1%", containLabel: true }\n' +
-    '  xAxis: { type: "category", data: [日期数组], axisLabel: { rotate: 45 }, boundaryGap: false }\n' +
-    '  yAxis: { type: "value", name: "单位：单位名" }\n' +
-    '  series: [{ type: "line", name: "", data: [ly_value,...,index_value],\n' +
-    '            markPoint: { data: [{type:"max"},{type:"min"}] },\n' +
-    '            markLine: { data: [{type:"average"}] } }]\n\n' +
-    "【饼图 pie — 多机构占比或多指标对比】\n" +
-    '  title: { text: "标题", left: "center" }\n' +
-    '  tooltip: { trigger: "item", formatter: "{d}%" }\n' +
-    '  legend: { data: [...], left: "center", bottom: "bottom" }\n' +
-    '  series: [{ type: "pie", name: 系列名, data: [{name,value},...],\n' +
-    '            radius: "40%", center: ["50%","40%"], labelLine: { show: true } }]\n\n' +
-    "### 6. 字段命名与交互\n" +
-    "- 图表数据字段名必须使用中文，禁止展示数据库原始英文字段名\n" +
-    "- 标题需具备业务洞察力\n" +
-    "- 必须配置 tooltip（提示框）\n" +
-    "- 数据量大时推荐 dataZoom";
+    "- ly_value → 日期=去年同期，类型=上年同期\n\n" +
+    "═══════════════════════════════════════════════════════════\n" +
+    "【柱状图 bar 模板 — 多机构多指标对比】\n" +
+    "必须逐字遵循以下 JSON 结构，仅替换标注的占位内容：\n" +
+    '{\n' +
+    '  title: { text: "具业务洞察的标题" },\n' +
+    '  tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },\n' +
+    '  legend: { data: ["机构A", "机构B"], top: "10%" },\n' +
+    '  color: ["#5470c6", "#91cc75", "#fac858", "#ee6666", "#73c0de", "#3ba272"],\n' +
+    '  grid: { left: "3%", right: "4%", bottom: "3%", top: "30%", containLabel: true },\n' +
+    '  xAxis: { type: "category", data: ["指标1", "指标2", "指标3"] },\n' +
+    '  yAxis: { type: "value", name: "数值（单位）" },\n' +
+    '  series: [\n' +
+    '    { name: "机构A", type: "bar", data: [值1, 值2, 值3] },\n' +
+    '    { name: "机构B", type: "bar", data: [值1, 值2, 值3] }\n' +
+    '  ]\n' +
+    '}\n' +
+    "关键约束（违反任何一条即视为错误）：\n" +
+    "- xAxis.data 放指标名（如资产规模、贷款规模），不是机构名！机构名放 series.name\n" +
+    "- 每个 series 代表一个机构/维度，name 值必须与 legend.data 完全一致\n" +
+    "- color 数组按顺序自动分配颜色，禁止手动添加 itemStyle 到 series 中\n" +
+    "- title 不设置 left 属性（保持默认左对齐）\n" +
+    "- data 数组的值顺序必须与 xAxis.data 的一一对应\n" +
+    "- 严禁修改 grid/tooltip 的任何属性值\n" +
+    "- 调色板固定顺序：#5470c6, #91cc75, #fac858, #ee6666, #73c0de, #3ba272\n\n" +
+    "═══════════════════════════════════════════════════════════\n" +
+    "【折线图 line 模板 — 单指标时间趋势】\n" +
+    "必须逐字遵循以下 JSON 结构，仅替换标注的占位内容：\n" +
+    '{\n' +
+    '  title: { text: "指标名趋势图", left: "center" },\n' +
+    '  tooltip: { trigger: "axis", confine: true },\n' +
+    '  legend: { data: ["指标名称"], left: "right" },\n' +
+    '  grid: { left: "2%", bottom: "0%", right: "1%", containLabel: true },\n' +
+    '  xAxis: { type: "category", data: ["日期1", "日期2", ...], axisLabel: { rotate: 45 }, boundaryGap: false },\n' +
+    '  yAxis: { type: "value", name: "单位：单位名" },\n' +
+    '  series: [{\n' +
+    '    name: "",\n' +
+    '    type: "line",\n' +
+    '    data: [值1, 值2, ...],\n' +
+    '    markPoint: { data: [{ type: "max" }, { type: "min" }] },\n' +
+    '    markLine: { data: [{ type: "average" }] }\n' +
+    '  }]\n' +
+    '}\n' +
+    "关键约束（违反任何一条即视为错误）：\n" +
+    '- series[0].name 必须为 ""（空字符串），指标名通过 legend.data 展示\n' +
+    "- xAxis.boundaryGap 必须为 false（折线从坐标轴起点开始，严禁遗漏或设为 true）\n" +
+    "- xAxis.axisLabel.rotate 必须为 45（日期标签旋转防重叠）\n" +
+    "- data 数组必须按日期升序排列（最旧→最新）\n" +
+    "- markPoint 必须包含 {type:\"max\"} 和 {type:\"min\"}\n" +
+    "- markLine 必须包含 {type:\"average\"}\n" +
+    '- grid.left 默认 "2%"，当 yAxis 数值位数≥6位时调大为 "4%"~"8%"\n' +
+    '- title.text 须包含具体指标名（如"各项贷款余额趋势图"），禁止只写"趋势图"\n' +
+    "- 严禁去掉 markPoint 或 markLine，严禁修改 grid/tooltip 的属性值\n\n" +
+    "═══════════════════════════════════════════════════════════\n" +
+    "【饼图 pie 模板 — 多机构占比或多指标对比】\n" +
+    "必须逐字遵循以下 JSON 结构，仅替换标注的占位内容：\n" +
+    '{\n' +
+    '  title: { text: "占比分析标题", left: "center" },\n' +
+    '  tooltip: { trigger: "item", formatter: "{b}: {d}%" },\n' +
+    '  legend: { data: ["类别A", "类别B", ...], left: "center", bottom: "bottom" },\n' +
+    '  color: ["#5470c6", "#91cc75", "#fac858", "#ee6666", "#73c0de", "#3ba272"],\n' +
+    '  series: [{\n' +
+    '    type: "pie",\n' +
+    '    name: "系列名",\n' +
+    '    radius: ["0%", "65%"],\n' +
+    '    center: ["50%", "45%"],\n' +
+    '    data: [{ name: "类别A", value: 值 }, { name: "类别B", value: 值 }, ...],\n' +
+    '    label: { show: true, formatter: "{b}: {d}%" },\n' +
+    '    emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0,0,0,0.5)" } }\n' +
+    '  }]\n' +
+    '}\n' +
+    "关键约束：\n" +
+    "- data 中每项的 name 显示为扇区标签，value 为数值\n" +
+    "- color 数组按顺序自动分配，禁止手动添加 itemStyle\n\n" +
+    "═══════════════════════════════════════════════════════════\n" +
+    "## 禁止事项（违反即视为图表生成失败）\n" +
+    "- 柱状图：禁止把机构名放在 xAxis.data 中（机构名放 series.name 和 legend.data）\n" +
+    "- 折线图：禁止 series.name 填非空值、禁止 boundaryGap 不为 false、禁止遗漏 markPoint/markLine\n" +
+    "- 折线图：禁止 data 不按日期升序排列\n" +
+    "- 禁止修改模板中 tooltip.trigger / grid 百分比 / legend 位置等结构属性\n" +
+    "- 禁止添加模板规定之外的样式字段（如 textStyle、title.textStyle 等）\n" +
+    "- 禁止使用 emoji 或展示英文数据库字段名\n" +
+    "- 数据量大时（≥20个类别/时间点）推荐添加 dataZoom: [{ type: \"slider\", start: 0, end: 100 }]";
 
   schema = z.preprocess(
     coerceEChartsInput,
@@ -256,7 +370,9 @@ class EChartsGenerator extends Tool {
         `[EChartsGenerator] 输入参数: ${JSON.stringify(input, null, 2)}`,
       );
 
-      const { title, echartsOption: rawOption, analysisType } = input;
+      // 安全网：在 _call 内部再次应用 coercion（LangChain 可能绕过 Zod preprocess）
+      const coerced = coerceEChartsInput(input);
+      const { title, echartsOption: rawOption, analysisType } = coerced;
 
       if (!title || typeof title !== "string") {
         return JSON.stringify(

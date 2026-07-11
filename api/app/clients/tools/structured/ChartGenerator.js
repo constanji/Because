@@ -3,8 +3,75 @@ const { z } = require("zod");
 const { logger } = require("@because/data-schemas");
 
 /**
+ * 从字符串中提取 JSON 核心部分（跳过前导/后随的非 JSON 字符如 \\n）。
+ */
+function extractJsonCore(s) {
+  const firstBrace = s.search(/[\[\{]/);
+  const lastSquare = s.lastIndexOf("]");
+  const lastCurly = s.lastIndexOf("}");
+  const lastBrace = Math.max(lastSquare, lastCurly);
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return s.substring(firstBrace, lastBrace + 1);
+  }
+  return s;
+}
+
+/**
+ * 多策略 JSON 解析器：直接解析 → 修复尾部逗号 → 修复缺少引号的 key → 单引号转双引号。
+ * 覆盖 LLM 最常见的 JSON 错误，所有策略都失败时返回 undefined。
+ */
+function repairAndParseJson(jsonStr) {
+  // 策略1: 直接解析
+  try {
+    return JSON.parse(jsonStr);
+  } catch (_) {
+    /* continue */
+  }
+
+  // 策略2: 修复尾部多余逗号（,} 或 ,]）
+  try {
+    const fixed = jsonStr.replace(/,\s*([}\]])/g, "$1");
+    return JSON.parse(fixed);
+  } catch (_) {
+    /* continue */
+  }
+
+  // 策略3: 修复缺少引号的 key（含中文 key）
+  // 覆盖: {key:、{key":、,key:、,key": — 不会误伤 {"key":
+  try {
+    let fixed = jsonStr.replace(/,\s*([}\]])/g, "$1");
+    // 先修复缺开头引号: key": → "key":
+    fixed = fixed.replace(
+      /([\{,])\s*([a-zA-Z_一-鿿][\w一-鿿]*)"\s*:/g,
+      '$1"$2":',
+    );
+    // 再修复完全无引号: key:
+    fixed = fixed.replace(
+      /([\{,])\s*([a-zA-Z_一-鿿][\w一-鿿]*)\s*:/g,
+      '$1"$2":',
+    );
+    return JSON.parse(fixed);
+  } catch (_) {
+    /* continue */
+  }
+
+  // 策略4: 单引号 key/value 替换为双引号
+  try {
+    const fixed = jsonStr
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/'/g, '"');
+    return JSON.parse(fixed);
+  } catch (_) {
+    /* continue */
+  }
+
+  return undefined;
+}
+
+/**
  * 鲁棒地把模型输出解析为对象。
- * 兼容：多层 JSON.stringify、markdown ```json 代码块包裹、前后空白。
+ * 兼容：多层 JSON.stringify、markdown ```json 代码块包裹、前后空白/换行、
+ * LLM 常见 JSON 语法错误（缺少引号的 key、尾部逗号等）。
  * 无法解析时返回 undefined。
  */
 function robustParse(value) {
@@ -14,13 +81,17 @@ function robustParse(value) {
     if (!s) {
       return undefined;
     }
+    // 去除 markdown 代码块围栏
     const fence = s.match(/^```(?:json|javascript|js)?\s*([\s\S]*?)\s*```$/i);
     if (fence) {
       s = fence[1].trim();
     }
-    try {
-      v = JSON.parse(s);
-    } catch (_err) {
+    // 提取 JSON 核心 + 多策略解析
+    const core = extractJsonCore(s);
+    const parsed = repairAndParseJson(core);
+    if (parsed !== undefined) {
+      v = parsed;
+    } else {
       return undefined;
     }
   }
@@ -259,7 +330,9 @@ class ChartGenerator extends Tool {
         `[ChartGenerator] 输入参数: ${JSON.stringify(input, null, 2)}`,
       );
 
-      const { title, g2Spec: rawSpec, analysisType } = input;
+      // 安全网：在 _call 内部再次应用 coercion（LangChain 可能绕过 Zod preprocess）
+      const coerced = coerceChartInput(input);
+      const { title, g2Spec: rawSpec, analysisType } = coerced;
 
       if (!title || typeof title !== "string") {
         return JSON.stringify(
