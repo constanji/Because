@@ -489,11 +489,16 @@ export default function ProjectsManagement() {
                 ? `${getApiBase()}/api/dat-projects/${(editingProject as DatProject)._id}`
                 : `${getApiBase()}/api/dat-projects`;
 
+            // 新建项目时，用默认值兜底，确保 embedding_store / content_store 等完整配置一定会传给后端
+            const payload = isEdit
+                ? editingProject
+                : { ...getDefaultProject(), ...editingProject };
+
             const response = await fetch(url, {
                 method: isEdit ? 'PUT' : 'POST',
                 headers: getHeaders(),
                 credentials: 'include',
-                body: JSON.stringify(editingProject),
+                body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
