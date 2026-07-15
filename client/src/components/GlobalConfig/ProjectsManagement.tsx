@@ -48,15 +48,21 @@ const BRCH_LV_OPTIONS: { value: number; label: string }[] = [
     { value: 4, label: '4 仅本级' },
 ];
 
-// 单个树节点：自带展开/折叠 + brchLv 数据权限级别编辑
+// 单个树节点：自带展开/折叠 + brchLv 数据权限级别编辑 + 增删改操作
 function OrgTreeNodeView({
     node,
     depth,
     onUpdateBrchLv,
+    onAddChild,
+    onEdit,
+    onDelete,
 }: {
     node: OrgTreeNode;
     depth: number;
     onUpdateBrchLv?: (node: OrgTreeNode, newLv: number) => void;
+    onAddChild?: (node: OrgTreeNode) => void;
+    onEdit?: (node: OrgTreeNode) => void;
+    onDelete?: (node: OrgTreeNode) => void;
 }) {
     const [expanded, setExpanded] = useState(depth < 2); // 默认展开前两层
     const hasChildren = node.children && node.children.length > 0;
@@ -107,6 +113,40 @@ function OrgTreeNodeView({
                         </SelectContent>
                     </Select>
                 )}
+                {(onAddChild || onEdit || onDelete) && (
+                    <span className="flex items-center gap-1 ml-1" onClick={(e) => e.stopPropagation()}>
+                        {onAddChild && (
+                            <button
+                                type="button"
+                                onClick={() => onAddChild(node)}
+                                className="rounded p-1 text-text-tertiary hover:text-blue-500 hover:bg-surface-hover transition-colors"
+                                title="添加子机构"
+                            >
+                                <Plus className="h-3 w-3" />
+                            </button>
+                        )}
+                        {onEdit && (
+                            <button
+                                type="button"
+                                onClick={() => onEdit(node)}
+                                className="rounded p-1 text-text-tertiary hover:text-blue-500 hover:bg-surface-hover transition-colors"
+                                title="编辑"
+                            >
+                                <Edit2 className="h-3 w-3" />
+                            </button>
+                        )}
+                        {onDelete && (
+                            <button
+                                type="button"
+                                onClick={() => onDelete(node)}
+                                className="rounded p-1 text-text-tertiary hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                title="删除"
+                            >
+                                <Trash2 className="h-3 w-3" />
+                            </button>
+                        )}
+                    </span>
+                )}
             </div>
             {hasChildren && expanded && (
                 <ul className="border-l border-border-light pl-3 ml-1.5 space-y-0.5">
@@ -116,6 +156,9 @@ function OrgTreeNodeView({
                             node={child}
                             depth={depth + 1}
                             onUpdateBrchLv={onUpdateBrchLv}
+                            onAddChild={onAddChild}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
                         />
                     ))}
                 </ul>
@@ -128,14 +171,28 @@ function OrgTreeNodeView({
 function OrgTreeView({
     nodes,
     onUpdateBrchLv,
+    onAddChild,
+    onEdit,
+    onDelete,
 }: {
     nodes: OrgTreeNode[];
     onUpdateBrchLv?: (node: OrgTreeNode, newLv: number) => void;
+    onAddChild?: (node: OrgTreeNode) => void;
+    onEdit?: (node: OrgTreeNode) => void;
+    onDelete?: (node: OrgTreeNode) => void;
 }) {
     return (
         <ul className="space-y-0.5">
             {nodes.map((n) => (
-                <OrgTreeNodeView key={n.key} node={n} depth={0} onUpdateBrchLv={onUpdateBrchLv} />
+                <OrgTreeNodeView
+                    key={n.key}
+                    node={n}
+                    depth={0}
+                    onUpdateBrchLv={onUpdateBrchLv}
+                    onAddChild={onAddChild}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                />
             ))}
         </ul>
     );
@@ -352,6 +409,20 @@ export default function ProjectsManagement() {
     // Org Nodes (机构信息 — 数据源表驱动)
     const [orgNodesTree, setOrgNodesTree] = useState<OrgTreeNode[]>([]);
     const [orgNodesLoading, setOrgNodesLoading] = useState(false);
+
+    // Org Nodes — 手动新增/编辑
+    const [orgNodeModalVisible, setOrgNodeModalVisible] = useState(false);
+    const [orgNodeEditingCode, setOrgNodeEditingCode] = useState<string | null>(null);
+    const [orgNodeForm, setOrgNodeForm] = useState<{
+        orgCode: string;
+        orgName: string;
+        parentOrgCode: string;
+        brchLv: number | '';
+    }>({ orgCode: '', orgName: '', parentOrgCode: '', brchLv: '' });
+    const [orgNodeFormSubmitting, setOrgNodeFormSubmitting] = useState(false);
+
+    // Org Nodes — Excel 导入
+    const [orgExcelUploading, setOrgExcelUploading] = useState(false);
 
     // Org Nodes — 从数据源表导入
     const [orgTableImportModalVisible, setOrgTableImportModalVisible] = useState(false);
@@ -1267,6 +1338,18 @@ export default function ProjectsManagement() {
     };
 
     // 修改单个机构的数据权限级别
+    const updateOrgNodeBrchLvInTree = (nodes: OrgTreeNode[], orgCode: string, newLv: number): OrgTreeNode[] => {
+        return nodes.map((n) => {
+            if (n.orgCode === orgCode) {
+                return { ...n, brchLv: newLv };
+            }
+            if (n.children?.length) {
+                return { ...n, children: updateOrgNodeBrchLvInTree(n.children, orgCode, newLv) };
+            }
+            return n;
+        });
+    };
+
     const handleUpdateBrchLv = async (node: OrgTreeNode, newLv: number) => {
         if (!contentManagementProject) return;
         if (node.brchLv === newLv) return;
@@ -1288,12 +1371,169 @@ export default function ProjectsManagement() {
                 message: `${node.orgCode} 数据权限已更新为 ${lvLabel}`,
                 status: 'success',
             });
-            await loadOrgNodes(contentManagementProject._id);
+            // 仅更新本地节点，避免整树刷新导致展开状态丢失
+            setOrgNodesTree((prev) => updateOrgNodeBrchLvInTree(prev, node.orgCode, newLv));
         } catch (e) {
             showToast({
                 message: `修改失败: ${e instanceof Error ? e.message : '未知错误'}`,
                 status: 'error',
             });
+        }
+    };
+
+    // ─── 机构信息 — 手动增删改 ─────────────────────────────────────────────
+
+    const orgNodeParentOptions = useMemo(() => {
+        const walk = (nodes: OrgTreeNode[], result: { value: string; label: string }[]) => {
+            for (const n of nodes || []) {
+                result.push({ value: n.orgCode, label: `${n.orgCode} ${n.orgName}` });
+                walk(n.children, result);
+            }
+            return result;
+        };
+        return walk(orgNodesTree, []);
+    }, [orgNodesTree]);
+
+    const resetOrgNodeForm = () => {
+        setOrgNodeForm({ orgCode: '', orgName: '', parentOrgCode: '', brchLv: '' });
+        setOrgNodeEditingCode(null);
+    };
+
+    const openAddOrgNode = (parentNode?: OrgTreeNode) => {
+        resetOrgNodeForm();
+        setOrgNodeForm((prev) => ({
+            ...prev,
+            parentOrgCode: parentNode?.orgCode || '',
+            brchLv: 4,
+        }));
+        setOrgNodeModalVisible(true);
+    };
+
+    const openEditOrgNode = (node: OrgTreeNode) => {
+        setOrgNodeEditingCode(node.orgCode);
+        setOrgNodeForm({
+            orgCode: node.orgCode,
+            orgName: node.orgName || '',
+            parentOrgCode: node.managementOrg || '',
+            brchLv: node.brchLv ?? '',
+        });
+        setOrgNodeModalVisible(true);
+    };
+
+    const handleSaveOrgNode = async () => {
+        if (!contentManagementProject) {
+            showToast({ message: '请先选择项目', status: 'warning' });
+            return;
+        }
+        const { orgCode, orgName, parentOrgCode, brchLv } = orgNodeForm;
+        if (!orgCode.trim() || !orgName.trim() || brchLv === '') {
+            showToast({ message: '请填写完整机构信息', status: 'warning' });
+            return;
+        }
+        setOrgNodeFormSubmitting(true);
+        try {
+            const payload = {
+                orgName: orgName.trim(),
+                parentOrgCode: parentOrgCode.trim(),
+                brchLv: Number(brchLv),
+            };
+            let response: Response;
+            if (orgNodeEditingCode) {
+                response = await fetch(
+                    `${getDatApiBaseUrl()}/api/v1/org/nodes/${encodeURIComponent(orgNodeEditingCode)}`,
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ projectId: contentManagementProject._id, ...payload }),
+                    }
+                );
+            } else {
+                response = await fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectId: contentManagementProject._id,
+                        orgCode: orgCode.trim(),
+                        ...payload,
+                    }),
+                });
+            }
+            const body = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(body?.message || `HTTP ${response.status}`);
+            }
+            showToast({ message: orgNodeEditingCode ? '更新成功' : '新增成功', status: 'success' });
+            setOrgNodeModalVisible(false);
+            resetOrgNodeForm();
+            await loadOrgNodes(contentManagementProject._id);
+            await loadOrgDataTimes(contentManagementProject._id);
+        } catch (e) {
+            showToast({
+                message: `${orgNodeEditingCode ? '更新' : '新增'}失败: ${e instanceof Error ? e.message : '未知错误'}`,
+                status: 'error',
+            });
+        } finally {
+            setOrgNodeFormSubmitting(false);
+        }
+    };
+
+    const handleDeleteOrgNode = async (node: OrgTreeNode) => {
+        if (!contentManagementProject) return;
+        const hasChildren = (node.children || []).length > 0;
+        const confirmed = window.confirm(
+            hasChildren
+                ? `该机构 ${node.orgCode} 存在子机构，删除将级联删除整个子树。此操作不可恢复！`
+                : `确定删除机构 ${node.orgCode} 吗？此操作不可恢复！`
+        );
+        if (!confirmed) return;
+        try {
+            const params = new URLSearchParams({
+                projectId: contentManagementProject._id,
+                cascade: hasChildren ? 'true' : 'false',
+            });
+            const response = await fetch(
+                `${getDatApiBaseUrl()}/api/v1/org/nodes/${encodeURIComponent(node.orgCode)}?${params}`,
+                { method: 'DELETE' }
+            );
+            const body = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(body?.message || `HTTP ${response.status}`);
+            }
+            showToast({ message: '删除成功', status: 'success' });
+            await loadOrgNodes(contentManagementProject._id);
+            await loadOrgDataTimes(contentManagementProject._id);
+        } catch (e) {
+            showToast({ message: `删除失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        }
+    };
+
+    const handleOrgImportFromExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!contentManagementProject || !e.target.files?.[0]) return;
+        const file = e.target.files[0];
+        setOrgExcelUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('projectId', contentManagementProject._id);
+            formData.append('file', file);
+            const response = await fetch(`${getDatApiBaseUrl()}/api/v1/org/nodes/import-excel`, {
+                method: 'POST',
+                body: formData,
+            });
+            const body = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(body?.message || `HTTP ${response.status}`);
+            }
+            showToast({
+                message: `Excel 导入成功: ${body.imported} 个机构节点, dataDt=${body.dataDt}`,
+                status: 'success',
+            });
+            await loadOrgNodes(contentManagementProject._id);
+            await loadOrgDataTimes(contentManagementProject._id);
+        } catch (e) {
+            showToast({ message: `Excel 导入失败: ${e instanceof Error ? e.message : '未知错误'}`, status: 'error' });
+        } finally {
+            setOrgExcelUploading(false);
+            e.target.value = '';
         }
     };
 
@@ -2685,9 +2925,33 @@ export default function ProjectsManagement() {
                                         <div className="flex items-center gap-2">
                                             <button
                                                 type="button"
-                                                onClick={openOrgTableImportModal}
+                                                onClick={() => openAddOrgNode()}
                                                 disabled={!contentManagementProject}
                                                 className="btn btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
+                                            >
+                                                <Plus className="h-3.5 w-3.5" /> 添加机构
+                                            </button>
+                                            <label
+                                                className={cn(
+                                                    'btn btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 cursor-pointer',
+                                                    orgExcelUploading && 'opacity-60 cursor-not-allowed'
+                                                )}
+                                            >
+                                                <Upload className="h-3.5 w-3.5" />
+                                                {orgExcelUploading ? '上传中...' : '上传 Excel'}
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept=".xlsx"
+                                                    disabled={orgExcelUploading || !contentManagementProject}
+                                                    onChange={handleOrgImportFromExcel}
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={openOrgTableImportModal}
+                                                disabled={!contentManagementProject}
+                                                className="btn btn-neutral text-xs px-3 py-1.5 flex items-center gap-1.5"
                                             >
                                                 <Database className="h-3.5 w-3.5" /> 从数据源导入
                                             </button>
@@ -2776,7 +3040,13 @@ export default function ProjectsManagement() {
                                         </div>
                                     ) : orgNodesTree.length > 0 ? (
                                         <div className="max-h-[400px] overflow-auto text-sm">
-                                            <OrgTreeView nodes={orgNodesTree} onUpdateBrchLv={handleUpdateBrchLv} />
+                                            <OrgTreeView
+                                                nodes={orgNodesTree}
+                                                onUpdateBrchLv={handleUpdateBrchLv}
+                                                onAddChild={openAddOrgNode}
+                                                onEdit={openEditOrgNode}
+                                                onDelete={handleDeleteOrgNode}
+                                            />
                                         </div>
                                     ) : (
                                         <div className="flex h-40 flex-col items-center justify-center gap-2 text-text-secondary">
@@ -3527,6 +3797,119 @@ export default function ProjectsManagement() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Org Node Add / Edit Modal (手动新增/编辑机构节点) */}
+            {orgNodeModalVisible && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-lg rounded-lg border border-border-light bg-surface-primary shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-light p-4">
+                            <h3 className="text-lg font-semibold text-text-primary">
+                                {orgNodeEditingCode ? '编辑机构' : '新增机构'}
+                            </h3>
+                            <button
+                                onClick={() => {
+                                    setOrgNodeModalVisible(false);
+                                    resetOrgNodeForm();
+                                }}
+                                className="rounded p-1 text-text-secondary hover:bg-surface-hover"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="space-y-4 p-4">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">
+                                    机构编码 <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={orgNodeForm.orgCode}
+                                    onChange={(e) =>
+                                        setOrgNodeForm((prev) => ({ ...prev, orgCode: e.target.value }))
+                                    }
+                                    disabled={!!orgNodeEditingCode}
+                                    placeholder="例如：A0001"
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm disabled:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:disabled:bg-gray-800"
+                                />
+                                {orgNodeEditingCode && (
+                                    <p className="mt-1 text-xs text-text-tertiary">编码作为唯一标识，编辑模式下不可修改</p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">
+                                    机构名称 <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={orgNodeForm.orgName}
+                                    onChange={(e) =>
+                                        setOrgNodeForm((prev) => ({ ...prev, orgName: e.target.value }))
+                                    }
+                                    placeholder="例如：南京分行"
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">父机构</label>
+                                <select
+                                    value={orgNodeForm.parentOrgCode}
+                                    onChange={(e) =>
+                                        setOrgNodeForm((prev) => ({ ...prev, parentOrgCode: e.target.value }))
+                                    }
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="">留空表示根节点</option>
+                                    {orgNodeParentOptions.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-text-primary">
+                                    数据权限级别 <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    value={orgNodeForm.brchLv}
+                                    onChange={(e) =>
+                                        setOrgNodeForm((prev) => ({
+                                            ...prev,
+                                            brchLv: e.target.value === '' ? '' : Number(e.target.value),
+                                        }))
+                                    }
+                                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="">请选择</option>
+                                    {BRCH_LV_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-border-light p-4">
+                            <Button
+                                onClick={() => {
+                                    setOrgNodeModalVisible(false);
+                                    resetOrgNodeForm();
+                                }}
+                                className="btn btn-neutral"
+                            >
+                                取消
+                            </Button>
+                            <Button
+                                onClick={handleSaveOrgNode}
+                                disabled={orgNodeFormSubmitting}
+                                className="btn btn-primary"
+                            >
+                                {orgNodeFormSubmitting ? '保存中...' : orgNodeEditingCode ? '更新' : '添加'}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}
