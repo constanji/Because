@@ -192,8 +192,10 @@ export default function EndpointsConfig({ startupConfig: propStartupConfig }: En
         throw new Error(errorData.error || '保存失败');
       }
 
-      // 清除缓存并刷新配置
+      // 清除缓存并刷新配置（包括 models 和 endpoints 缓存）
       queryClient.invalidateQueries([QueryKeys.startupConfig]);
+      queryClient.invalidateQueries([QueryKeys.models]);
+      queryClient.invalidateQueries([QueryKeys.endpoints]);
       await Promise.all([refetch(), refreshEndpoints()]);
       setShowEditor(false);
       setEditingEndpoint(undefined);
@@ -215,7 +217,7 @@ export default function EndpointsConfig({ startupConfig: propStartupConfig }: En
       const apiBase = baseHref.endsWith('/') ? baseHref.slice(0, -1) : baseHref;
 
       const headers: HeadersInit = {};
-      
+
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -236,8 +238,10 @@ export default function EndpointsConfig({ startupConfig: propStartupConfig }: En
         status: 'success',
       });
 
-      // 清除缓存并刷新配置
+      // 清除缓存并刷新配置（包括 models 和 endpoints 缓存）
       queryClient.invalidateQueries([QueryKeys.startupConfig]);
+      queryClient.invalidateQueries([QueryKeys.models]);
+      queryClient.invalidateQueries([QueryKeys.endpoints]);
       await refetch();
       await refreshEndpoints();
     } catch (error) {
@@ -302,10 +306,12 @@ export default function EndpointsConfig({ startupConfig: propStartupConfig }: En
         throw new Error(errorData.error || '保存失败');
       }
 
-      // 清除缓存并刷新配置
+      // 清除缓存并刷新配置（包括 models 缓存）
       queryClient.invalidateQueries([QueryKeys.startupConfig]);
+      queryClient.invalidateQueries([QueryKeys.models]);
+      queryClient.invalidateQueries([QueryKeys.endpoints]);
       await Promise.all([refetch(), refreshEndpoints()]);
-      
+
       setNewModelName('');
       setAddingModelToEndpoint(null);
       showToast({
@@ -336,7 +342,7 @@ export default function EndpointsConfig({ startupConfig: propStartupConfig }: En
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
-      
+
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -361,8 +367,10 @@ export default function EndpointsConfig({ startupConfig: propStartupConfig }: En
         throw new Error(errorData.error || '保存失败');
       }
 
-      // 清除缓存并刷新配置
+      // 清除缓存并刷新配置（包括 models 和 endpoints 缓存）
       queryClient.invalidateQueries([QueryKeys.startupConfig]);
+      queryClient.invalidateQueries([QueryKeys.models]);
+      queryClient.invalidateQueries([QueryKeys.endpoints]);
       await Promise.all([refetch(), refreshEndpoints()]);
       
       showToast({

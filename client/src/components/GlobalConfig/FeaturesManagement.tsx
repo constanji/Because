@@ -245,6 +245,7 @@ export default function FeaturesManagement({ startupConfig: propStartupConfig }:
 
       // 清除缓存并刷新配置（在后台进行，不影响UI显示）
       queryClient.invalidateQueries([QueryKeys.startupConfig]);
+      queryClient.invalidateQueries([QueryKeys.models]);
       
       // 延迟刷新配置，确保服务器缓存已更新
       // 只有当服务器返回的值与保存时的值相同（说明服务器已经更新）时，才更新本地状态

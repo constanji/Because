@@ -128,9 +128,14 @@ async function saveCustomEndpointsConfig(req, res) {
 
     await fs.writeFile(configPath, updatedYaml, 'utf8');
 
-    // Clear the startup config cache
+    // Clear all related caches to ensure config changes take effect immediately
     const cache = getLogStores(CacheKeys.CONFIG_STORE);
     await cache.delete(CacheKeys.STARTUP_CONFIG);
+    await cache.delete(CacheKeys.ENDPOINT_CONFIG);
+
+    // Also clear APP_CONFIG cache
+    const { clearAppConfigCache } = require('~/server/services/Config/app');
+    await clearAppConfigCache();
 
     logger.info(`Custom endpoint "${endpoint.name}" ${existingIndex >= 0 ? 'updated' : 'added'} successfully`);
 
@@ -204,9 +209,14 @@ async function deleteCustomEndpointsConfig(req, res) {
 
     await fs.writeFile(configPath, updatedYaml, 'utf8');
 
-    // Clear the startup config cache
+    // Clear all related caches to ensure config changes take effect immediately
     const cache = getLogStores(CacheKeys.CONFIG_STORE);
     await cache.delete(CacheKeys.STARTUP_CONFIG);
+    await cache.delete(CacheKeys.ENDPOINT_CONFIG);
+
+    // Also clear APP_CONFIG cache
+    const { clearAppConfigCache } = require('~/server/services/Config/app');
+    await clearAppConfigCache();
 
     logger.info(`Custom endpoint "${endpointName}" deleted successfully`);
 

@@ -429,8 +429,9 @@ export default function MCPManagement({ startupConfig: propStartupConfig }: MCPM
         throw new Error(errorData.error || '保存失败');
       }
 
-      // 清除缓存并刷新配置
+      // 清除缓存并刷新配置（包括 models 缓存）
       queryClient.invalidateQueries([QueryKeys.startupConfig]);
+      queryClient.invalidateQueries([QueryKeys.models]);
       await refetch();
       await refreshServers();
       // 刷新连接状态，以便新增的服务能显示连接状态
@@ -456,7 +457,7 @@ export default function MCPManagement({ startupConfig: propStartupConfig }: MCPM
       const apiBase = baseHref.endsWith('/') ? baseHref.slice(0, -1) : baseHref;
 
       const headers: HeadersInit = {};
-      
+
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -477,8 +478,9 @@ export default function MCPManagement({ startupConfig: propStartupConfig }: MCPM
         status: 'success',
       });
 
-      // 清除缓存并刷新配置
+      // 清除缓存并刷新配置（包括 models 缓存）
       queryClient.invalidateQueries([QueryKeys.startupConfig]);
+      queryClient.invalidateQueries([QueryKeys.models]);
       await refetch();
       await refreshServers();
       // 刷新连接状态，以便更新连接状态列表

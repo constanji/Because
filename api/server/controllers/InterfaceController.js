@@ -168,24 +168,20 @@ async function updateInterfaceConfig(req, res) {
       return res.status(500).json({ error: errorMessage });
     }
 
-    // 清除缓存，强制重新加载配置
+    // 清除所有相关缓存，强制重新加载配置
     const { getLogStores } = require('~/cache');
     const { CacheKeys } = require('@because/data-provider');
-    const cache = getLogStores(CacheKeys.CONFIG_STORE);
-    
-    // 清除所有相关缓存
-    await cache.delete(CacheKeys.STARTUP_CONFIG);
-    await cache.delete(CacheKeys.APP_CONFIG);
-    
-    // 也清除 BASE_CONFIG_KEY（如果存在）
-    const BASE_CONFIG_KEY = 'base';
-    await cache.delete(BASE_CONFIG_KEY);
-    
-    // 清除所有角色相关的缓存（如果有）
-    // 注意：这里我们无法知道所有可能的角色，所以只能清除已知的缓存键
-    // 实际的角色缓存会在下次请求时自动刷新
-    
-    logger.info('[updateInterfaceConfig] Cache cleared: STARTUP_CONFIG, APP_CONFIG, BASE_CONFIG_KEY');
+    const { clearAppConfigCache } = require('~/server/services/Config/app');
+
+    // 清除 CONFIG_STORE 中的缓存
+    const configStore = getLogStores(CacheKeys.CONFIG_STORE);
+    await configStore.delete(CacheKeys.STARTUP_CONFIG);
+    await configStore.delete(CacheKeys.ENDPOINT_CONFIG);
+
+    // 清除 APP_CONFIG 缓存（使用正确的清除函数）
+    await clearAppConfigCache();
+
+    logger.info('[updateInterfaceConfig] All caches cleared');
     logger.info('[updateInterfaceConfig] Config saved successfully. Next request will reload from file.');
 
     res.json({ success: true, message: 'Interface configuration updated successfully' });

@@ -187,8 +187,9 @@ export const useGetModelsQuery = (
     initialData: initialModelsConfig,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
-    staleTime: Infinity,
+    // 移除 staleTime: Infinity 和 refetchOnMount: false
+    // 让 invalidateQueries 可以正常工作，当配置更新时触发重新获取
+    staleTime: 0,
     ...config,
   });
 };

@@ -13,7 +13,9 @@ export const useGetEndpointsQuery = <TData = t.TEndpointsConfig>(
     [QueryKeys.endpoints],
     () => dataService.getAIEndpoints(),
     {
-      staleTime: Infinity,
+      // 移除 staleTime: Infinity，让 invalidateQueries 可以正常工作
+      // 当配置更新时，调用 invalidateQueries([QueryKeys.endpoints]) 会触发重新获取
+      staleTime: 0,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
       refetchOnMount: false,

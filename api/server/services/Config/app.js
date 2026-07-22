@@ -70,12 +70,21 @@ async function getAppConfig(options = {}) {
 
 /**
  * Clear the app configuration cache
+ * Also clears related caches (endpoints, models) to ensure full refresh
  * @returns {Promise<boolean>}
  */
 async function clearAppConfigCache() {
-  const cache = getLogStores(CacheKeys.CONFIG_STORE);
-  const cacheKey = CacheKeys.APP_CONFIG;
-  return await cache.delete(cacheKey);
+  // Clear APP_CONFIG cache (where getAppConfig stores its result)
+  const appConfigCache = getLogStores(CacheKeys.APP_CONFIG);
+  await appConfigCache.delete(BASE_CONFIG_KEY);
+
+  // Clear related caches in CONFIG_STORE
+  const configStore = getLogStores(CacheKeys.CONFIG_STORE);
+  await configStore.delete(CacheKeys.ENDPOINT_CONFIG);
+  await configStore.delete(CacheKeys.MODELS_CONFIG);
+  await configStore.delete(CacheKeys.STARTUP_CONFIG);
+
+  return true;
 }
 
 module.exports = {
