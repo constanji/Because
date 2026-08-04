@@ -69,7 +69,7 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
   /** @type {ArtifactPromises} */
   const artifactPromises = [];
   const { contentParts, aggregateContent } = createContentAggregator();
-  const toolEndCallback = createToolEndCallback({ req, res, artifactPromises });
+  const toolEndCallback = createToolEndCallback({ req, res, artifactPromises, contentParts });
   const eventHandlers = getDefaultHandlers({
     res,
     aggregateContent,
